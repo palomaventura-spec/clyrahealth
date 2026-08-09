@@ -1,0 +1,1 @@
+export default function Page(){return <main className="legal-page"><article className="card section-card"><h1>Termos de Uso</h1><p>O acesso ao ClyraHealth é destinado a usuários autorizados pela organização contratante. Esta minuta deve ser revisada juridicamente antes do lançamento definitivo.</p><p>Versão: 1.0.0 · Agosto de 2026</p></article></main>}

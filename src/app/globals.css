@@ -319,3 +319,62 @@ dd { margin:0; font-weight:650; }
     font-size: .82em;
   }
 }
+
+
+/* Entrega 1 - Portal e agendamento público */
+.calendar-block {
+  background: repeating-linear-gradient(135deg, #d7dde6, #d7dde6 8px, #cbd3df 8px, #cbd3df 16px) !important;
+  color: #3d4a5c !important;
+  opacity: .9;
+}
+.booking-narrow { max-width: 720px; }
+.stepper { display:flex; align-items:center; max-width:360px; margin:0 0 28px; }
+.stepper span { width:34px; height:34px; border-radius:999px; display:grid; place-items:center; background:#e7edf4; color:#6b7788; font-weight:800; }
+.stepper span.active { background:var(--primary); color:#fff; }
+.stepper span.done { background:#d9f4e9; color:#0b6647; }
+.stepper i { height:2px; background:#dfe6ee; flex:1; }
+.selected-professional { display:flex; align-items:center; gap:14px; padding:16px; margin-bottom:16px; }
+.selected-professional .avatar { margin:0; }
+.selected-professional div:last-child { display:grid; gap:4px; }
+.booking-help { margin-top:18px; padding:0 4px; }
+.booking-help p { margin:5px 0 0; font-size:14px; }
+.booking-filter { grid-template-columns:1fr 1fr auto; align-items:end; }
+.slot-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+.slot-button { width:100%; padding:12px 8px; border-radius:10px; border:1px solid #cfe0ff; background:#edf4ff; color:#174a8b; font-weight:800; }
+.slot-button:hover { background:var(--primary); color:white; border-color:var(--primary); }
+.empty-state { padding:26px; text-align:center; background:var(--surface-2); border-radius:12px; color:var(--muted); }
+.patient-appointments { display:grid; gap:12px; }
+.patient-appointment { border:1px solid var(--border); border-radius:14px; padding:18px; display:flex; justify-content:space-between; align-items:center; gap:20px; }
+.patient-appointment > div:first-child { display:grid; gap:5px; }
+.patient-appointment > div:first-child span { color:var(--muted); }
+.patient-appointment > div:first-child b { font-size:14px; }
+.patient-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.professional-public-link { display:inline-block; margin-top:8px; color:var(--primary); font-size:13px; font-weight:700; }
+
+@media (max-width: 700px) {
+  .booking-filter { grid-template-columns:1fr; }
+  .slot-grid { grid-template-columns:repeat(3,1fr); }
+  .patient-appointment { align-items:flex-start; flex-direction:column; }
+  .patient-actions { justify-content:flex-start; }
+}
+
+/* ClyraHealth v0.2.0 - Atendimento */
+textarea{width:100%;resize:vertical;background:white;border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font:inherit}
+textarea:focus{outline:2px solid rgba(35,103,232,.15);border-color:var(--primary)}
+.badge-arrived{background:#fff7d6;color:#8b6210}.badge-in_progress{background:#ede9fe;color:#5b3dad}
+.calendar-arrived{background:#fef3c7!important;color:#7c570d!important}.calendar-in-progress{background:#e8e1ff!important;color:#5636a4!important}
+.attendance-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:18px;margin-bottom:20px}
+.attendance-meta div{display:grid;gap:5px}.attendance-meta span{color:var(--muted);font-size:12px;text-transform:uppercase;font-weight:800}
+.attendance-form{display:grid;gap:18px}.clinical-note-form{display:grid;gap:10px}.clinical-note-list{display:grid;gap:10px;margin-top:18px}
+.clinical-note-list article{border-left:3px solid var(--primary);background:var(--surface-2);border-radius:0 12px 12px 0;padding:14px 16px}
+.clinical-note-list p{margin:5px 0 0;white-space:pre-wrap}.finish-card{display:flex;align-items:center;justify-content:space-between;gap:18px}
+.table-actions{display:flex;flex-wrap:wrap;gap:7px}.header-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+@media(max-width:700px){.attendance-meta{grid-template-columns:1fr}.finish-card{flex-direction:column;align-items:stretch}}
+
+/* ClyraHealth v0.3.0 - Documentos */
+.document-type-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.document-type-tab{padding:9px 12px;border:1px solid var(--border);background:white;border-radius:10px;font-size:13px;font-weight:700}.document-type-tab.active{background:var(--primary);border-color:var(--primary);color:white}.document-form{display:grid;gap:18px}.document-warning{padding:13px 15px;background:#fff8df;border:1px solid #f3df93;color:#75520c;border-radius:10px;font-size:13px;line-height:1.5}.document-action-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}.document-action-card{border:1px solid var(--border);border-radius:12px;padding:15px;display:grid;gap:5px;background:white}.document-action-card:hover{border-color:var(--primary);box-shadow:var(--shadow)}.document-action-card span{font-size:12px;color:var(--muted)}.document-list{display:grid;gap:7px}.document-list>a{display:flex;justify-content:space-between;gap:12px;padding:11px 13px;background:var(--surface-2);border-radius:10px}.document-screen{max-width:980px;margin:30px auto;padding:0 20px}.document-toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:18px}.clinical-document-paper{background:white;width:210mm;min-height:297mm;max-width:100%;margin:auto;padding:22mm 20mm;box-shadow:0 16px 45px rgba(22,33,47,.12);color:#111}.clinical-document-header{display:flex;justify-content:space-between;gap:30px;border-bottom:2px solid #1f65d6;padding-bottom:18px}.clinical-document-header>div:first-child{display:grid;gap:4px}.clinical-document-header small{color:#555}.document-number{text-align:right;font-size:12px;color:#555}.document-heading{padding:32px 0 20px;text-align:center}.document-heading>span{text-transform:uppercase;font-size:12px;letter-spacing:.12em;color:#2367e8;font-weight:800}.document-heading h1{margin:6px 0 0;font-size:28px}.document-patient{display:grid;grid-template-columns:2fr 1fr;border:1px solid #ddd;border-radius:8px;padding:14px;margin:0 0 28px}.document-patient div{display:grid;gap:3px}.document-patient dt{font-size:11px;text-transform:uppercase;font-weight:800}.document-patient dd{margin:0}.document-body{min-height:390px}.document-body p{white-space:pre-wrap;color:#111;font-size:15px;line-height:1.8}.document-body h3{margin-top:28px}.clinical-document-footer{text-align:center;margin-top:60px;display:grid;gap:5px}.signature-line{width:280px;max-width:80%;border-top:1px solid #111;margin:0 auto 8px}.clinical-document-footer span{font-size:13px;color:#444}@media(max-width:850px){.document-action-grid{grid-template-columns:1fr 1fr}.clinical-document-paper{width:100%;min-height:auto;padding:28px}.document-patient{grid-template-columns:1fr;gap:12px}}@media print{body{background:white}.sidebar,.no-print{display:none!important}.app-shell{display:block}.content{padding:0}.document-screen{max-width:none;margin:0;padding:0}.clinical-document-paper{width:100%;min-height:0;box-shadow:none;padding:12mm 15mm}.clinical-document-header .brand{font-size:20px}@page{size:A4;margin:0}}
+
+/* ClyraHealth v0.5.0 */
+.automation-grid{display:grid;gap:10px}.automation-item{display:grid;grid-template-columns:1fr 180px auto;gap:12px;align-items:center;border:1px solid var(--border);border-radius:12px;padding:14px}.automation-item div{display:grid;gap:4px}.ai-chat{min-height:340px;max-height:520px;overflow:auto;background:var(--surface-2);border-radius:14px;padding:14px;display:grid;gap:10px;align-content:start}.ai-message{max-width:85%;padding:10px 12px;border-radius:12px;background:white;border:1px solid var(--border)}.ai-message p{margin:4px 0 0}.ai-message-user{justify-self:end;background:#eaf2ff}.ai-message-bot{justify-self:start}.ai-input{display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:12px}@media(max-width:700px){.automation-item,.ai-input{grid-template-columns:1fr}}
+
+.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.premium-card{outline:2px solid var(--primary)}.auth-link{display:block;margin-top:12px;text-align:center}@media(max-width:800px){.pricing-grid{grid-template-columns:1fr}}

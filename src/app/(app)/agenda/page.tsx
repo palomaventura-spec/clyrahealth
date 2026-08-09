@@ -1,4 +1,9 @@
-import { createAppointmentAction, updateAppointmentStatusAction } from "@/app/actions";
+import {
+  createAppointmentAction,
+  createScheduleBlockAction,
+  deleteScheduleBlockAction,
+  updateAppointmentStatusAction
+} from "@/app/actions";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/auth";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -18,32 +23,25 @@ export default async function AgendaPage({
       ? user.professional.id
       : undefined;
 
-  const [professionals, patients, appointments] = await Promise.all([
-    prisma.professional.findMany({
-      where: { companyId, active: true },
-      orderBy: { name: "asc" }
-    }),
-    prisma.patient.findMany({
-      where: { companyId },
-      orderBy: { name: "asc" }
-    }),
+  const [professionals, patients, appointments, blocks] = await Promise.all([
+    prisma.professional.findMany({ where: { companyId, active: true }, orderBy: { name: "asc" } }),
+    prisma.patient.findMany({ where: { companyId }, orderBy: { name: "asc" } }),
     prisma.appointment.findMany({
-      where: {
-        companyId,
-        ...(professionalFilter ? { professionalId: professionalFilter } : {})
-      },
-      include: {
-        patient: true,
-        professional: true
-      },
+      where: { companyId, ...(professionalFilter ? { professionalId: professionalFilter } : {}) },
+      include: { patient: true, professional: true },
       orderBy: { startsAt: "asc" },
       take: 300
+    }),
+    prisma.scheduleBlock.findMany({
+      where: { companyId, ...(professionalFilter ? { professionalId: professionalFilter } : {}) },
+      include: { professional: true },
+      orderBy: { startsAt: "asc" },
+      take: 150
     })
   ]);
 
   const calendarEvents = appointments.map((a) => ({
     id: a.id,
-    title: `${a.patient.name} · ${a.professional.name}`,
     start: a.startsAt.toISOString(),
     end: a.endsAt.toISOString(),
     status: a.status,
@@ -52,142 +50,146 @@ export default async function AgendaPage({
     reason: a.reason
   }));
 
+  const calendarBlocks = blocks.map((b) => ({
+    id: b.id,
+    start: b.startsAt.toISOString(),
+    end: b.endsAt.toISOString(),
+    title: b.title,
+    professional: b.professional.name
+  }));
+
   return (
     <div>
       <div className="page-header">
         <div>
           <span className="eyebrow">Operação</span>
           <h1>Agenda</h1>
-          <p>
-            Visualize a clínica por mês, semana ou dia. Arraste uma consulta para
-            alterar o horário.
-          </p>
+          <p>Consultas, reagendamentos, bloqueios e disponibilidade da clínica.</p>
         </div>
       </div>
 
       {params.erro === "horario" && (
-        <div className="alert alert-error">
-          Já existe uma consulta nesse horário para o profissional.
-        </div>
+        <div className="alert alert-error">Já existe uma consulta nesse horário para o profissional.</div>
       )}
 
       <section className="card section-card calendar-card">
-        <CalendarBoard
-          events={calendarEvents}
-          editable={user.role !== "PROFESSIONAL" || Boolean(user.professional?.id)}
-        />
+        <CalendarBoard events={calendarEvents} blocks={calendarBlocks} editable />
       </section>
 
-      {user.role !== "PROFESSIONAL" && (
+      <div className={user.role === "PROFESSIONAL" ? "one-column" : "two-columns"}>
         <section className="card section-card">
-          <h2>Novo agendamento</h2>
+          <h2>{user.role === "PROFESSIONAL" ? "Novo agendamento na minha agenda" : "Novo agendamento interno"}</h2>
           <form action={createAppointmentAction} className="form-grid">
-            <label>
-              Profissional
-              <select name="professionalId" required>
-                <option value="">Selecione</option>
-                {professionals.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Paciente
+            {user.role === "PROFESSIONAL" && user.professional ? (
+              <>
+                <input type="hidden" name="professionalId" value={user.professional.id} />
+                <label>Profissional<input value={user.professional.name} disabled /></label>
+              </>
+            ) : (
+              <label>Profissional
+                <select name="professionalId" required>
+                  <option value="">Selecione</option>
+                  {professionals.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </label>
+            )}
+            <label>Paciente
               <select name="patientId" required>
                 <option value="">Selecione</option>
-                {patients.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                {patients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </label>
-
-            <label>
-              Data
-              <input name="date" type="date" required />
-            </label>
-
-            <label>
-              Horário
-              <input name="time" type="time" required />
-            </label>
-
-            <label className="span-2">
-              Motivo
-              <input name="reason" />
-            </label>
-
+            <label>Data<input name="date" type="date" required /></label>
+            <label>Horário<input name="time" type="time" required /></label>
+            <label className="span-2">Motivo<input name="reason" /></label>
             <button className="btn btn-primary span-2">Agendar</button>
           </form>
         </section>
-      )}
+
+        <section className="card section-card">
+          <h2>Bloquear agenda</h2>
+          <form action={createScheduleBlockAction} className="form-grid">
+            {user.role === "PROFESSIONAL" && user.professional ? (
+              <>
+                <input type="hidden" name="professionalId" value={user.professional.id} />
+                <label>Profissional<input value={user.professional.name} disabled /></label>
+              </>
+            ) : (
+              <label>Profissional
+                <select name="professionalId" required>
+                  <option value="">Selecione</option>
+                  {professionals.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </label>
+            )}
+            <label>Motivo<input name="title" placeholder="Almoço, reunião, férias..." /></label>
+            <label>Data<input name="date" type="date" required /></label>
+            <label>Início<input name="startTime" type="time" required /></label>
+            <label>Fim<input name="endTime" type="time" required /></label>
+            <button className="btn btn-secondary span-2">Criar bloqueio</button>
+          </form>
+        </section>
+      </div>
 
       <section className="card section-card">
-        <div className="section-title">
-          <div>
-            <h2>Lista de consultas</h2>
-            <p>Use esta área para atualizar o status do atendimento.</p>
-          </div>
-        </div>
-
+        <h2>Lista de consultas</h2>
         <div className="table-wrap">
           <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Paciente</th>
-                <th>Profissional</th>
-                <th>Status</th>
-                <th>Ação</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Data</th><th>Paciente</th><th>Profissional</th><th>Status</th><th>Ação</th></tr></thead>
             <tbody>
               {appointments.map((a) => (
                 <tr key={a.id}>
                   <td>{formatDateTime(a.startsAt)}</td>
-                  <td>
-                    {a.patient.name}
-                    <br />
-                    <small>{a.reason ?? ""}</small>
-                  </td>
+                  <td>{a.patient.name}<br/><small>{a.reason ?? ""}</small></td>
                   <td>{a.professional.name}</td>
+                  <td><StatusBadge status={a.status} /></td>
                   <td>
-                    <StatusBadge status={a.status} />
-                  </td>
-                  <td>
-                    <form
-                      action={updateAppointmentStatusAction}
-                      className="status-form"
-                    >
+                    <form action={updateAppointmentStatusAction} className="status-form">
                       <input type="hidden" name="id" value={a.id} />
                       <select name="status" defaultValue={a.status}>
                         <option value="SCHEDULED">Agendada</option>
                         <option value="CONFIRMED">Confirmada</option>
+                        <option value="ARRIVED">Paciente chegou</option>
+                        <option value="IN_PROGRESS">Em atendimento</option>
                         <option value="COMPLETED">Concluída</option>
                         <option value="CANCELLED">Cancelada</option>
                         <option value="NO_SHOW">Falta</option>
                       </select>
-                      <button className="btn btn-small btn-secondary">
-                        Salvar
-                      </button>
+                      <button className="btn btn-small btn-secondary">Salvar</button>
                     </form>
                   </td>
                 </tr>
               ))}
-
-              {appointments.length === 0 && (
-                <tr>
-                  <td colSpan={5}>Nenhuma consulta cadastrada.</td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </section>
+
+      {blocks.length > 0 && (
+        <section className="card section-card">
+          <h2>Bloqueios cadastrados</h2>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Período</th><th>Profissional</th><th>Motivo</th><th></th></tr></thead>
+              <tbody>
+                {blocks.map(b => (
+                  <tr key={b.id}>
+                    <td>{formatDateTime(b.startsAt)} → {formatDateTime(b.endsAt)}</td>
+                    <td>{b.professional.name}</td>
+                    <td>{b.title}</td>
+                    <td>
+                      <form action={deleteScheduleBlockAction}>
+                        <input type="hidden" name="id" value={b.id} />
+                        <button className="btn btn-small btn-secondary">Remover</button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

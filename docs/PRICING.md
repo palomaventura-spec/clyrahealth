@@ -1,0 +1,5 @@
+# Pricing
+
+Starter
+Clinic
+Enterprise

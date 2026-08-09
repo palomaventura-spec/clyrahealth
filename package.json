@@ -1,6 +1,6 @@
 {
-  "name": "clyrahealth-mvp",
-  "version": "0.1.0",
+  "name": "clyrahealth",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

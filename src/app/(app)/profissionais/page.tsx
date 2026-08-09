@@ -57,7 +57,8 @@ export default async function ProfessionalsPage() {
               <label>Conselho<input name="council" placeholder="CRM, CRO, CREFITO..." /></label>
               <label>Registro<input name="registrationNumber" /></label>
               <label>Duração (min)<input name="appointmentDuration" type="number" defaultValue={30} min={10} /></label>
-              <label>E-mail<input name="email" type="email" /></label>
+              <label>E-mail de acesso<input name="email" type="email" required /></label>
+            <label>Senha provisória<input name="password" type="password" minLength={8} required placeholder="Mínimo 8 caracteres" /></label>
               <label>Telefone<input name="phone" /></label>
               <button className="btn btn-primary span-2">Cadastrar profissional</button>
             </form>
@@ -73,6 +74,7 @@ export default async function ProfessionalsPage() {
               <h3>{p.name}</h3>
               <p>{typeLabels[p.type]} · {p.specialty?.name ?? "Sem especialidade"}</p>
               <small>{p.council ?? ""} {p.registrationNumber ?? ""}</small>
+              {p.publicSlug && <a className="professional-public-link" href={`/agendar/${user.company?.slug}?profissional=${p.publicSlug}`} target="_blank">Link público →</a>}
             </div>
             <div className="availability-list">
               {p.availabilities.map(a => <span key={a.id}>{weekdays[a.weekday]} {a.startTime}–{a.endTime}</span>)}

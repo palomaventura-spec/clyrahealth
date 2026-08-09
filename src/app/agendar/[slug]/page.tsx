@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { publicBookingAction } from "@/app/actions";
+import { notFound, redirect } from "next/navigation";
+import { identifyPatientAction } from "@/app/actions";
+import { getPatientForCompany } from "@/lib/patient-auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function PublicBookingPage({
@@ -8,7 +9,7 @@ export default async function PublicBookingPage({
   searchParams
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<Record<string,string|undefined>>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { slug } = await params;
   const query = await searchParams;
@@ -17,13 +18,22 @@ export default async function PublicBookingPage({
     include: {
       professionals: {
         where: { active: true },
-        include: { specialty: true, availabilities: true },
+        include: { specialty: true },
         orderBy: { name: "asc" }
       }
     }
   });
-
   if (!company) notFound();
+
+  const patient = await getPatientForCompany(slug);
+  if (patient) {
+    const suffix = query.profissional ? `?profissional=${encodeURIComponent(query.profissional)}` : "";
+    redirect(`/agendar/${slug}/horarios${suffix}`);
+  }
+
+  const selectedProfessional = query.profissional
+    ? company.professionals.find(p => p.publicSlug === query.profissional || p.id === query.profissional)
+    : null;
 
   return (
     <main className="booking-page">
@@ -31,45 +41,35 @@ export default async function PublicBookingPage({
         <Link href="/" className="brand">Clyra<span>Health</span></Link>
         <div><strong>{company.name}</strong><small>{[company.city, company.state].filter(Boolean).join(" / ")}</small></div>
       </header>
-      <div className="booking-container">
+
+      <div className="booking-container booking-narrow">
+        <div className="stepper"><span className="active">1</span><i></i><span>2</span><i></i><span>3</span></div>
         <section>
           <span className="eyebrow">Agendamento online</span>
-          <h1>Agende seu atendimento</h1>
-          <p>Escolha o profissional, a data e o horário desejado.</p>
-          {query.sucesso && <div className="alert alert-success">Agendamento realizado! A clínica poderá confirmar o atendimento.</div>}
-          {query.erro === "ocupado" && <div className="alert alert-error">Este horário acabou de ser ocupado. Escolha outro.</div>}
+          <h1>{selectedProfessional ? `Agende com ${selectedProfessional.name}` : "Vamos identificar você"}</h1>
+          <p>Se você já é paciente desta clínica, informe CPF e data de nascimento. Se ainda não for, o cadastro será feito no próximo passo.</p>
         </section>
-        <form action={publicBookingAction} className="card booking-form">
-          <input type="hidden" name="slug" value={slug}/>
-          <label>Profissional
-            <select name="professionalId" required>
-              <option value="">Selecione</option>
-              {company.professionals.map(p => <option key={p.id} value={p.id}>{p.name} — {p.specialty?.name ?? p.type}</option>)}
-            </select>
-          </label>
-          <div className="form-grid">
-            <label>Data<input name="date" type="date" required/></label>
-            <label>Horário<input name="time" type="time" required/></label>
+
+        {query.erro && <div className="alert alert-error">Não conseguimos validar os dados. Tente novamente.</div>}
+
+        {selectedProfessional && (
+          <div className="card selected-professional">
+            <div className="avatar">{selectedProfessional.name.slice(0,2).toUpperCase()}</div>
+            <div><strong>{selectedProfessional.name}</strong><small>{selectedProfessional.specialty?.name ?? "Profissional da saúde"}</small></div>
           </div>
-          <label>Seu nome<input name="patientName" required/></label>
-          <div className="form-grid">
-            <label>E-mail<input name="email" type="email"/></label>
-            <label>Telefone<input name="phone"/></label>
-          </div>
-          <label>Motivo do atendimento<input name="reason"/></label>
-          <button className="btn btn-primary btn-lg">Confirmar solicitação</button>
+        )}
+
+        <form action={identifyPatientAction} className="card booking-form">
+          <input type="hidden" name="slug" value={slug} />
+          <label>CPF<input name="document" inputMode="numeric" placeholder="Somente números" required /></label>
+          <label>Data de nascimento<input name="birthDate" type="date" required /></label>
+          <button className="btn btn-primary btn-lg">Continuar</button>
         </form>
-        <section className="professionals-public">
-          <h2>Profissionais</h2>
-          <div className="cards-grid">
-            {company.professionals.map(p => <div className="card professional-card" key={p.id}>
-              <div className="avatar">{p.name.slice(0,2).toUpperCase()}</div>
-              <h3>{p.name}</h3>
-              <p>{p.specialty?.name ?? "Profissional da saúde"}</p>
-              <small>{p.council} {p.registrationNumber}</small>
-            </div>)}
-          </div>
-        </section>
+
+        <div className="booking-help">
+          <strong>Primeira consulta?</strong>
+          <p>Preencha os dados acima. Se o cadastro não existir, o ClyraHealth abrirá automaticamente o formulário de novo paciente.</p>
+        </div>
       </div>
     </main>
   );

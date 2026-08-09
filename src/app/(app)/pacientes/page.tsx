@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createPatientAction } from "@/app/actions";
 import { prisma } from "@/lib/prisma";
 import { requireCompany } from "@/lib/auth";
@@ -31,7 +32,7 @@ export default async function PatientsPage() {
             <thead><tr><th>Paciente</th><th>Contato</th><th>Documento</th><th>Convênio</th><th>Consultas</th></tr></thead>
             <tbody>
               {patients.map(p => <tr key={p.id}>
-                <td><strong>{p.name}</strong></td>
+                <td><Link href={`/pacientes/${p.id}`}><strong>{p.name}</strong></Link></td>
                 <td>{p.email ?? "—"}<br/><small>{p.phone ?? ""}</small></td>
                 <td>{p.document ?? "—"}</td>
                 <td>{p.insurance ?? "—"}</td>

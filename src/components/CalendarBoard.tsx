@@ -10,7 +10,6 @@ import { moveAppointmentAction } from "@/app/actions";
 
 type CalendarEvent = {
   id: string;
-  title: string;
   start: string;
   end: string;
   status: string;
@@ -19,9 +18,19 @@ type CalendarEvent = {
   reason?: string | null;
 };
 
+type CalendarBlock = {
+  id: string;
+  start: string;
+  end: string;
+  title: string;
+  professional: string;
+};
+
 const statusClass: Record<string, string> = {
   SCHEDULED: "calendar-scheduled",
   CONFIRMED: "calendar-confirmed",
+  ARRIVED: "calendar-arrived",
+  IN_PROGRESS: "calendar-in-progress",
   COMPLETED: "calendar-completed",
   CANCELLED: "calendar-cancelled",
   NO_SHOW: "calendar-no-show"
@@ -29,38 +38,50 @@ const statusClass: Record<string, string> = {
 
 export function CalendarBoard({
   events,
+  blocks = [],
   editable = true
 }: {
   events: CalendarEvent[];
+  blocks?: CalendarBlock[];
   editable?: boolean;
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const calendarEvents = useMemo(
-    () =>
-      events.map((event) => ({
-        id: event.id,
-        title: `${event.patient} · ${event.professional}`,
-        start: event.start,
-        end: event.end,
-        classNames: [statusClass[event.status] ?? "calendar-scheduled"],
-        extendedProps: event
-      })),
-    [events]
-  );
+  const calendarEvents = useMemo(() => [
+    ...events.map((event) => ({
+      id: event.id,
+      title: `${event.patient} · ${event.professional}`,
+      start: event.start,
+      end: event.end,
+      classNames: [statusClass[event.status] ?? "calendar-scheduled"],
+      extendedProps: { ...event, kind: "appointment" }
+    })),
+    ...blocks.map((block) => ({
+      id: `block-${block.id}`,
+      title: `${block.title} · ${block.professional}`,
+      start: block.start,
+      end: block.end,
+      classNames: ["calendar-block"],
+      editable: false,
+      extendedProps: { ...block, kind: "block" }
+    }))
+  ], [events, blocks]);
 
   function persistMove(info: any) {
+    if (info.event.extendedProps.kind !== "appointment") {
+      info.revert();
+      return;
+    }
+
     const start = info.event.start;
     const end = info.event.end;
-
     if (!start || !end) {
       info.revert();
       return;
     }
 
     setMessage(null);
-
     startTransition(async () => {
       const result = await moveAppointmentAction({
         id: info.event.id,
@@ -84,7 +105,6 @@ export function CalendarBoard({
           {message}
         </div>
       )}
-
       {isPending && <div className="calendar-saving">Salvando alteração…</div>}
 
       <FullCalendar
@@ -96,12 +116,7 @@ export function CalendarBoard({
           center: "title",
           right: "dayGridMonth,timeGridWeek,timeGridDay"
         }}
-        buttonText={{
-          today: "Hoje",
-          month: "Mês",
-          week: "Semana",
-          day: "Dia"
-        }}
+        buttonText={{ today: "Hoje", month: "Mês", week: "Semana", day: "Dia" }}
         events={calendarEvents}
         editable={editable}
         eventStartEditable={editable}
@@ -118,12 +133,21 @@ export function CalendarBoard({
         eventDrop={persistMove}
         eventResize={persistMove}
         eventContent={(arg) => {
-          const event = arg.event.extendedProps as CalendarEvent;
+          const data = arg.event.extendedProps as any;
+          if (data.kind === "block") {
+            return (
+              <div className="calendar-event-content">
+                <strong>{arg.timeText}</strong>
+                <span>{data.title}</span>
+                <small>{data.professional}</small>
+              </div>
+            );
+          }
           return (
             <div className="calendar-event-content">
               <strong>{arg.timeText}</strong>
-              <span>{event.patient}</span>
-              <small>{event.professional}</small>
+              <span>{data.patient}</span>
+              <small>{data.professional}</small>
             </div>
           );
         }}

@@ -15,6 +15,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <label>Senha<input name="password" type="password" required /></label>
           <button className="btn btn-primary" type="submit">Entrar</button>
         </form>
+        <a href="/esqueci-senha" className="auth-link">Esqueci minha senha</a>
         <div className="demo-box">
           <strong>Conta demo</strong>
           <span>admin@demo.com</span>

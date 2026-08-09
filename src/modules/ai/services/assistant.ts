@@ -1,0 +1,8 @@
+export type AiIntent="BOOK"|"CANCEL"|"RESCHEDULE"|"LIST"|"CONFIRM"|"OTHER";
+export async function runReceptionAI({message,context}:{message:string;context?:string}):Promise<{reply:string;intent:AiIntent}>{
+ const provider=process.env.AI_PROVIDER??"mock", t=message.toLowerCase();
+ if(provider==="mock"){if(t.includes("marcar")||t.includes("agendar"))return {intent:"BOOK",reply:"Claro! Posso ajudar a encontrar um horário disponível."};if(t.includes("cancel"))return {intent:"CANCEL",reply:"Posso ajudar com o cancelamento."};if(t.includes("remarc")||t.includes("reagend"))return {intent:"RESCHEDULE",reply:"Posso mostrar novos horários disponíveis."};if(t.includes("confirm"))return {intent:"CONFIRM",reply:"Posso confirmar sua consulta."};if(t.includes("consulta")||t.includes("horário"))return {intent:"LIST",reply:"Posso consultar seus próximos agendamentos."};return {intent:"OTHER",reply:"Posso ajudar com agendamento, confirmação, cancelamento e reagendamento."};}
+ const key=process.env.OPENAI_API_KEY;if(!key)return {intent:"OTHER",reply:"A IA ainda não foi configurada pela clínica."};
+ const r=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.OPENAI_MODEL??"gpt-5-mini",input:`Você é a recepcionista virtual do ClyraHealth. Atue somente em tarefas administrativas de agenda. Nunca dê orientação clínica, diagnóstico ou prescrição. Contexto: ${context??""}\nPaciente: ${message}\nResponda de forma curta.`})});
+ const data:any=await r.json();if(!r.ok)return {intent:"OTHER",reply:"Não consegui processar agora."};const reply=data.output_text??"Posso ajudar com sua agenda.";return {intent:"OTHER",reply};
+}
