@@ -424,3 +424,14 @@ button[disabled]{opacity:.68;cursor:not-allowed}.button-spinner,.large-spinner{d
 /* v1.0.4.1 - agenda profissional em destaque */
 .schedule-highlight{margin-top:10px}.schedule-highlight .schedule-fieldset{border:2px solid #dbe7ff;background:#f8fbff}.schedule-highlight .schedule-fieldset legend{color:#175cd3}.field-help{display:block;margin-top:5px;color:var(--muted);font-size:12px}.schedule-day-toggle strong:after{content:" — ativar atendimento neste dia";font-weight:500;color:var(--muted);font-size:12px}
 @media(max-width:700px){.schedule-highlight{margin-top:4px}.schedule-day{padding:14px 10px}.schedule-day-toggle{min-height:36px}.schedule-periods input{min-height:44px}.schedule-day-toggle strong:after{display:block;margin-top:2px}}
+
+/* v1.0.4.4 specialty and agenda definitive */
+.schedule-intro{margin-bottom:16px;padding:12px 14px;background:#eef5ff;border-radius:12px}
+.schedule-intro p{margin:4px 0 0;color:var(--muted)}
+.schedule-day-active{border-color:#8bb5f5!important;background:#f4f8ff!important}
+.schedule-day-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.schedule-status{font-size:12px;font-weight:800;padding:4px 8px;border-radius:999px;background:#eef1f5;color:#65758b}
+.schedule-day-active .schedule-status{background:#dff2e8;color:#16704a}
+.schedule-periods{margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.schedule-period-row{display:grid;grid-template-columns:120px minmax(110px,1fr) 36px minmax(110px,1fr);gap:8px;align-items:center}
+@media(max-width:700px){.schedule-period-row{grid-template-columns:1fr 1fr}.schedule-period-row>span:first-child{grid-column:1/-1;font-weight:700}.schedule-period-row>span:nth-child(3){display:none}}

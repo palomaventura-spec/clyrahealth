@@ -23,16 +23,25 @@ function slugify(value: string) {
 
 
 function parseAvailabilityForm(formData: FormData) {
-  const rows: { weekday:number; startTime:string; endTime:string }[] = [];
+  const rows: { weekday: number; startTime: string; endTime: string }[] = [];
+
   for (const weekday of [0,1,2,3,4,5,6]) {
-    if (String(formData.get(`availability_${weekday}_enabled`) || "") !== "on") continue;
+    const enabled = String(formData.get(`availability_${weekday}_enabled`) || "") === "on";
+    if (!enabled) continue;
+
     for (const period of [1,2]) {
       const startTime = String(formData.get(`availability_${weekday}_start${period}`) || "");
       const endTime = String(formData.get(`availability_${weekday}_end${period}`) || "");
-      if (startTime && endTime && startTime < endTime) rows.push({ weekday, startTime, endTime });
+
+      if (!startTime || !endTime) continue;
+      if (!/^\\d{2}:\\d{2}$/.test(startTime) || !/^\\d{2}:\\d{2}$/.test(endTime)) continue;
+      if (startTime >= endTime) continue;
+
+      rows.push({ weekday, startTime, endTime });
     }
   }
-  return rows;
+
+  return rows.sort((a,b)=>a.weekday-b.weekday||a.startTime.localeCompare(b.startTime));
 }
 
 export async function loginAction(formData: FormData) {
@@ -151,99 +160,64 @@ export async function updateProfessionalAction(formData: FormData) {
 
   const professional = await prisma.professional.findFirst({
     where: { id, companyId },
-    include: { user: true }
+    include: { user: true, specialty: true }
   });
-
   if (!professional) return;
 
-  const manager = ["OWNER", "ADMIN"].includes(user.role);
-  const self =
-    user.role === "PROFESSIONAL" &&
-    user.professional?.id === id;
-
+  const manager = ["OWNER","ADMIN"].includes(user.role);
+  const self = user.role === "PROFESSIONAL" && user.professional?.id === id;
   if (!manager && !self) return;
 
-  const duration = Number(
-    formData.get("appointmentDuration") ||
-      professional.appointmentDuration
-  );
-
   const availabilities = parseAvailabilityForm(formData);
+  const duration = Number(formData.get("appointmentDuration") || professional.appointmentDuration);
 
   let specialtyId = professional.specialtyId;
   let type = professional.type;
 
   if (manager) {
-    type = String(
-      formData.get("type") || professional.type
-    ) as ProfessionalType;
-
+    type = String(formData.get("type") || professional.type) as ProfessionalType;
     const specialtyName = String(
       formData.get("newSpecialtyName") ||
-        formData.get("specialtyPreset") ||
-        ""
+      formData.get("specialtyPreset") ||
+      formData.get("currentSpecialtyName") ||
+      professional.specialty?.name ||
+      ""
     ).trim();
 
     if (specialtyName) {
       const specialty = await prisma.specialty.upsert({
-        where: {
-          companyId_name: {
-            companyId,
-            name: specialtyName
-          }
-        },
+        where: { companyId_name: { companyId, name: specialtyName } },
         update: {},
-        create: {
-          companyId,
-          name: specialtyName
-        }
+        create: { companyId, name: specialtyName }
       });
       specialtyId = specialty.id;
     }
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.availability.deleteMany({
-      where: { professionalId: id }
-    });
-
+  await prisma.$transaction(async tx => {
+    await tx.availability.deleteMany({ where: { professionalId: id } });
     await tx.professional.update({
       where: { id },
       data: {
-        name: manager
-          ? String(formData.get("name") || professional.name).trim()
-          : professional.name,
+        name: manager ? String(formData.get("name") || professional.name).trim() : professional.name,
         type,
         specialtyId,
-        council: manager
-          ? String(formData.get("council") || "") || null
-          : professional.council,
-        registrationNumber: manager
-          ? String(formData.get("registrationNumber") || "") || null
-          : professional.registrationNumber,
-        phone: manager
-          ? String(formData.get("phone") || "") || null
-          : professional.phone,
-        appointmentDuration:
-          Number.isFinite(duration) && duration >= 10
-            ? duration
-            : professional.appointmentDuration,
-        availabilities: {
-          create: availabilities
-        }
+        council: manager ? String(formData.get("council") || "") || null : professional.council,
+        registrationNumber: manager ? String(formData.get("registrationNumber") || "") || null : professional.registrationNumber,
+        phone: manager ? String(formData.get("phone") || "") || null : professional.phone,
+        appointmentDuration: Number.isFinite(duration) && duration >= 10 ? duration : professional.appointmentDuration,
+        availabilities: { create: availabilities }
       }
     });
   });
 
   await audit({
-    action: "UPDATE",
-    entityType: "Professional",
-    entityId: id,
+    action:"UPDATE",
+    entityType:"Professional",
+    entityId:id,
     companyId,
-    userId: user.id,
-    description: self
-      ? "Agenda do profissional atualizada pelo próprio profissional"
-      : "Cadastro e agenda do profissional atualizados"
+    userId:user.id,
+    description:`Profissional atualizado com ${availabilities.length} período(s) de agenda`
   });
 
   redirect(`/profissionais/${id}/editar?sucesso=1`);
@@ -669,8 +643,7 @@ export async function patientBookAppointmentAction(formData: FormData) {
   });
   if (!professional) redirect(`/agendar/${slug}/horarios?erro=profissional`);
 
-  const timeZone = company.timezone || "America/Sao_Paulo";
-  const startsAt = zonedDateTimeToUtc(date, time, timeZone);
+  const startsAt = new Date(`${date}T${time}:00`);
   const endsAt = new Date(startsAt.getTime() + professional.appointmentDuration * 60000);
 
   try {
@@ -772,8 +745,7 @@ export async function patientRescheduleAppointmentAction(formData: FormData) {
     redirect(`/paciente/${slug}/reagendar/${appointmentId}?date=${date}&erro=ocupado`);
   }
 
-  const timeZone = company.timezone || "America/Sao_Paulo";
-  const startsAt = zonedDateTimeToUtc(date, time, timeZone);
+  const startsAt = new Date(`${date}T${time}:00`);
   const endsAt = new Date(startsAt.getTime() + appointment.professional.appointmentDuration * 60000);
 
   await prisma.appointment.update({
