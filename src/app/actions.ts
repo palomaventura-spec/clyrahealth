@@ -146,22 +146,106 @@ export async function createProfessionalAction(formData: FormData) {
 }
 
 export async function updateProfessionalAction(formData: FormData) {
-  const {user,companyId}=await requireCompany(); const id=String(formData.get("id")||"");
-  const professional=await prisma.professional.findFirst({where:{id,companyId},include:{user:true}}); if(!professional) return;
-  const allowed=["OWNER","ADMIN"].includes(user.role)||(user.role==="PROFESSIONAL"&&user.professional?.id===id); if(!allowed) return;
-  let specialtyId=String(formData.get("specialtyId")||"")||null; const newSpecialtyName=String(formData.get("newSpecialtyName")||formData.get("specialtyPreset")||"").trim();
-  if(newSpecialtyName){const sp=await prisma.specialty.upsert({where:{companyId_name:{companyId,name:newSpecialtyName}},update:{},create:{companyId,name:newSpecialtyName}});specialtyId=sp.id;}
-  const availabilities=parseAvailabilityForm(formData); const duration=Number(formData.get("appointmentDuration")||professional.appointmentDuration);
-  await prisma.$transaction(async tx=>{
-    await tx.availability.deleteMany({where:{professionalId:id}});
-    await tx.professional.update({where:{id},data:{
-      name:String(formData.get("name")||professional.name).trim(),type:String(formData.get("type")||professional.type) as ProfessionalType,
-      specialtyId,council:String(formData.get("council")||"")||null,registrationNumber:String(formData.get("registrationNumber")||"")||null,
-      phone:String(formData.get("phone")||"")||null,appointmentDuration:Number.isFinite(duration)?duration:30,
-      availabilities:{create:availabilities}
-    }});
+  const { user, companyId } = await requireCompany();
+  const id = String(formData.get("id") || "");
+
+  const professional = await prisma.professional.findFirst({
+    where: { id, companyId },
+    include: { user: true }
   });
-  await audit({action:"UPDATE",entityType:"Professional",entityId:id,companyId,userId:user.id,description:"Cadastro e agenda do profissional atualizados"});
+
+  if (!professional) return;
+
+  const manager = ["OWNER", "ADMIN"].includes(user.role);
+  const self =
+    user.role === "PROFESSIONAL" &&
+    user.professional?.id === id;
+
+  if (!manager && !self) return;
+
+  const duration = Number(
+    formData.get("appointmentDuration") ||
+      professional.appointmentDuration
+  );
+
+  const availabilities = parseAvailabilityForm(formData);
+
+  let specialtyId = professional.specialtyId;
+  let type = professional.type;
+
+  if (manager) {
+    type = String(
+      formData.get("type") || professional.type
+    ) as ProfessionalType;
+
+    const specialtyName = String(
+      formData.get("newSpecialtyName") ||
+        formData.get("specialtyPreset") ||
+        ""
+    ).trim();
+
+    if (specialtyName) {
+      const specialty = await prisma.specialty.upsert({
+        where: {
+          companyId_name: {
+            companyId,
+            name: specialtyName
+          }
+        },
+        update: {},
+        create: {
+          companyId,
+          name: specialtyName
+        }
+      });
+      specialtyId = specialty.id;
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.availability.deleteMany({
+      where: { professionalId: id }
+    });
+
+    await tx.professional.update({
+      where: { id },
+      data: {
+        name: manager
+          ? String(formData.get("name") || professional.name).trim()
+          : professional.name,
+        type,
+        specialtyId,
+        council: manager
+          ? String(formData.get("council") || "") || null
+          : professional.council,
+        registrationNumber: manager
+          ? String(formData.get("registrationNumber") || "") || null
+          : professional.registrationNumber,
+        phone: manager
+          ? String(formData.get("phone") || "") || null
+          : professional.phone,
+        appointmentDuration:
+          Number.isFinite(duration) && duration >= 10
+            ? duration
+            : professional.appointmentDuration,
+        availabilities: {
+          create: availabilities
+        }
+      }
+    });
+  });
+
+  await audit({
+    action: "UPDATE",
+    entityType: "Professional",
+    entityId: id,
+    companyId,
+    userId: user.id,
+    description: self
+      ? "Agenda do profissional atualizada pelo próprio profissional"
+      : "Cadastro e agenda do profissional atualizados"
+  });
+
   redirect(`/profissionais/${id}/editar?sucesso=1`);
 }
 
@@ -585,7 +669,8 @@ export async function patientBookAppointmentAction(formData: FormData) {
   });
   if (!professional) redirect(`/agendar/${slug}/horarios?erro=profissional`);
 
-  const startsAt = new Date(`${date}T${time}:00`);
+  const timeZone = company.timezone || "America/Sao_Paulo";
+  const startsAt = zonedDateTimeToUtc(date, time, timeZone);
   const endsAt = new Date(startsAt.getTime() + professional.appointmentDuration * 60000);
 
   try {
@@ -687,7 +772,8 @@ export async function patientRescheduleAppointmentAction(formData: FormData) {
     redirect(`/paciente/${slug}/reagendar/${appointmentId}?date=${date}&erro=ocupado`);
   }
 
-  const startsAt = new Date(`${date}T${time}:00`);
+  const timeZone = company.timezone || "America/Sao_Paulo";
+  const startsAt = zonedDateTimeToUtc(date, time, timeZone);
   const endsAt = new Date(startsAt.getTime() + appointment.professional.appointmentDuration * 60000);
 
   await prisma.appointment.update({
