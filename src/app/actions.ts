@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { canManage, createSession, destroySession, requireCompany, requireUser } from "@/lib/auth";
-import { AppointmentStatus, ProfessionalType, UserRole } from "@prisma/client";
+import { AppointmentStatus, ProfessionalType, UserRole, Prisma } from "@prisma/client";
 import { createPatientSession, destroyPatientSession, getPatientForCompany } from "@/lib/patient-auth";
 import { getAvailableSlots } from "@/lib/slots";
 import { audit } from "@/lib/audit";
@@ -23,14 +23,35 @@ function slugify(value: string) {
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const password = String(formData.get("password") || "");
-  const user = await prisma.user.findUnique({ where: { email } });
+  const companySlug = String(formData.get("companySlug") || "").trim();
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { company: true }
+  });
 
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-    redirect("/login?erro=credenciais");
+    redirect(companySlug ? `/acesso/${companySlug}?erro=credenciais` : "/login?erro=credenciais");
+  }
+
+  if (companySlug && user.role !== "SUPER_ADMIN" && user.company?.slug !== companySlug) {
+    redirect(`/acesso/${companySlug}?erro=credenciais`);
+  }
+
+  if (user.role !== "SUPER_ADMIN" && user.company?.active === false) {
+    redirect(companySlug ? `/acesso/${companySlug}?erro=bloqueado` : "/login?erro=bloqueado");
   }
 
   await createSession(user.id);
-  await audit({ action: "LOGIN", entityType: "User", entityId: user.id, companyId: user.companyId, userId: user.id, description: "Login realizado" });
+  await audit({
+    action: "LOGIN",
+    entityType: "User",
+    entityId: user.id,
+    companyId: user.companyId,
+    userId: user.id,
+    description: "Login realizado"
+  });
+
   redirect(user.role === "SUPER_ADMIN" ? "/saas-admin" : "/dashboard");
 }
 
@@ -119,34 +140,80 @@ export async function createSpecialtyAction(formData: FormData) {
 
 export async function createProfessionalAction(formData: FormData) {
   const { user, companyId } = await requireCompany();
-  if (!["OWNER","ADMIN"].includes(user.role)) return;
+  if (!["OWNER", "ADMIN"].includes(user.role)) return;
 
   const name = String(formData.get("name") || "").trim();
   const email = String(formData.get("email") || "").trim().toLowerCase();
-  const password = String(formData.get("password") || "");
   const type = String(formData.get("type") || "OTHER") as ProfessionalType;
   const specialtyId = String(formData.get("specialtyId") || "") || null;
   const duration = Number(formData.get("appointmentDuration") || 30);
-  if (!name || !email || password.length < 8) return;
-  if (await prisma.user.findUnique({ where: { email } })) redirect("/profissionais?erro=email");
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  if (!name || !email) return;
+  if (await prisma.user.findUnique({ where: { email } })) {
+    redirect("/profissionais?erro=email");
+  }
+
   const publicSlugBase = slugify(name) || "profissional";
-  let publicSlug = publicSlugBase; let suffix=1;
-  while (await prisma.professional.findFirst({ where:{companyId,publicSlug} })) publicSlug=`${publicSlugBase}-${suffix++}`;
+  let publicSlug = publicSlugBase;
+  let suffix = 1;
+  while (await prisma.professional.findFirst({ where: { companyId, publicSlug } })) {
+    publicSlug = `${publicSlugBase}-${suffix++}`;
+  }
 
-  await prisma.$transaction(async tx => {
-    const professionalUser = await tx.user.create({ data: { name, email, passwordHash, role: "PROFESSIONAL", companyId } });
-    await tx.professional.create({ data: {
-      name, publicSlug, type, specialtyId, companyId, userId: professionalUser.id, email,
-      phone: String(formData.get("phone") || "") || null,
-      council: String(formData.get("council") || "") || null,
-      registrationNumber: String(formData.get("registrationNumber") || "") || null,
-      appointmentDuration: Number.isFinite(duration) ? duration : 30
-    }});
+  const randomPassword = crypto.randomBytes(32).toString("hex");
+  const passwordHash = await bcrypt.hash(randomPassword, 10);
+  const inviteToken = crypto.randomBytes(32).toString("hex");
+
+  const professionalUser = await prisma.$transaction(async tx => {
+    const createdUser = await tx.user.create({
+      data: {
+        name,
+        email,
+        passwordHash,
+        role: "PROFESSIONAL",
+        companyId,
+        mustChangePassword: true
+      }
+    });
+
+    await tx.professional.create({
+      data: {
+        name,
+        publicSlug,
+        type,
+        specialtyId,
+        companyId,
+        userId: createdUser.id,
+        email,
+        phone: String(formData.get("phone") || "") || null,
+        council: String(formData.get("council") || "") || null,
+        registrationNumber: String(formData.get("registrationNumber") || "") || null,
+        appointmentDuration: Number.isFinite(duration) ? duration : 30
+      }
+    });
+
+    await tx.passwordResetToken.create({
+      data: {
+        token: inviteToken,
+        userId: createdUser.id,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        inviteKind: "PROFESSIONAL_INVITE"
+      }
+    });
+
+    return createdUser;
   });
-  await audit({ action:"CREATE", entityType:"Professional", companyId, userId:user.id, description:`Profissional ${name} criado com login individual` });
-  revalidatePath("/profissionais"); revalidatePath("/equipe");
+
+  await audit({
+    action: "CREATE",
+    entityType: "Professional",
+    entityId: professionalUser.id,
+    companyId,
+    userId: user.id,
+    description: `Profissional ${name} criado com convite de acesso`
+  });
+
+  redirect(`/profissionais?convite=${inviteToken}&email=${encodeURIComponent(email)}&sucesso=1`);
 }
 
 export async function createPatientAction(formData: FormData) {
@@ -214,32 +281,48 @@ export async function createAppointmentAction(formData: FormData) {
   const startsAt = new Date(`${date}T${time}:00`);
   const endsAt = new Date(startsAt.getTime() + professional.appointmentDuration * 60000);
 
-  const [collision, block] = await Promise.all([
-    prisma.appointment.findFirst({
-      where: {
-        companyId,
-        professionalId,
-        status: { not: AppointmentStatus.CANCELLED },
-        startsAt: { lt: endsAt },
-        endsAt: { gt: startsAt }
-      }
-    }),
-    prisma.scheduleBlock.findFirst({
-      where: {
-        companyId,
-        professionalId,
-        startsAt: { lt: endsAt },
-        endsAt: { gt: startsAt }
-      }
-    })
-  ]);
+  try {
+    const createdAppointment = await prisma.$transaction(async tx => {
+      const [collision, block] = await Promise.all([
+        tx.appointment.findFirst({
+          where: {
+            companyId,
+            professionalId,
+            status: { not: AppointmentStatus.CANCELLED },
+            startsAt: { lt: endsAt },
+            endsAt: { gt: startsAt }
+          }
+        }),
+        tx.scheduleBlock.findFirst({
+          where: {
+            companyId,
+            professionalId,
+            startsAt: { lt: endsAt },
+            endsAt: { gt: startsAt }
+          }
+        })
+      ]);
 
-  if (collision || block) redirect("/agenda?erro=horario");
+      if (collision || block) throw new Error("SLOT_TAKEN");
 
-  const createdAppointment = await prisma.appointment.create({
-    data: { companyId, professionalId, patientId, startsAt, endsAt, reason }
-  });
-  await audit({ action:"CREATE", entityType:"Appointment", entityId:createdAppointment.id, companyId, userId:user.id, description:"Consulta criada" });
+      return tx.appointment.create({
+        data: { companyId, professionalId, patientId, startsAt, endsAt, reason }
+      });
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    });
+
+    await audit({
+      action: "CREATE",
+      entityType: "Appointment",
+      entityId: createdAppointment.id,
+      companyId,
+      userId: user.id,
+      description: "Consulta criada"
+    });
+  } catch (error) {
+    redirect("/agenda?erro=horario");
+  }
 
   revalidatePath("/agenda");
   revalidatePath("/dashboard");
@@ -270,22 +353,51 @@ export async function createTeamUserAction(formData: FormData) {
 
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const name = String(formData.get("name") || "").trim();
-  const password = String(formData.get("password") || "");
   const role = String(formData.get("role") || "RECEPTIONIST") as UserRole;
 
-  if (!email || !name || password.length < 8 || role === "SUPER_ADMIN") return;
-  if (await prisma.user.findUnique({ where: { email } })) return;
+  if (!email || !name || !["ADMIN", "RECEPTIONIST"].includes(role)) return;
+  if (await prisma.user.findUnique({ where: { email } })) {
+    redirect("/equipe?erro=email");
+  }
 
-  await prisma.user.create({
-    data: {
-      name,
-      email,
-      passwordHash: await bcrypt.hash(password, 10),
-      role,
-      companyId
-    }
+  const randomPassword = crypto.randomBytes(32).toString("hex");
+  const passwordHash = await bcrypt.hash(randomPassword, 10);
+  const inviteToken = crypto.randomBytes(32).toString("hex");
+
+  const created = await prisma.$transaction(async tx => {
+    const createdUser = await tx.user.create({
+      data: {
+        name,
+        email,
+        passwordHash,
+        role,
+        companyId,
+        mustChangePassword: true
+      }
+    });
+
+    await tx.passwordResetToken.create({
+      data: {
+        token: inviteToken,
+        userId: createdUser.id,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        inviteKind: "TEAM_INVITE"
+      }
+    });
+
+    return createdUser;
   });
-  revalidatePath("/equipe");
+
+  await audit({
+    action: "CREATE",
+    entityType: "User",
+    entityId: created.id,
+    companyId,
+    userId: user.id,
+    description: `Usuário ${name} (${role}) criado com convite`
+  });
+
+  redirect(`/equipe?convite=${inviteToken}&email=${encodeURIComponent(email)}&sucesso=1`);
 }
 
 export async function publicBookingAction(formData: FormData) {
@@ -523,25 +635,50 @@ export async function patientBookAppointmentAction(formData: FormData) {
   });
   if (!professional) redirect(`/agendar/${slug}/horarios?erro=profissional`);
 
-  const slots = await getAvailableSlots(company.id, professional.id, date);
-  if (!slots.includes(time)) {
-    redirect(`/agendar/${slug}/horarios?profissional=${professional.id}&date=${date}&erro=ocupado`);
-  }
-
   const startsAt = new Date(`${date}T${time}:00`);
   const endsAt = new Date(startsAt.getTime() + professional.appointmentDuration * 60000);
 
-  await prisma.appointment.create({
-    data: {
-      companyId: company.id,
-      professionalId: professional.id,
-      patientId: patient.id,
-      startsAt,
-      endsAt,
-      status: AppointmentStatus.SCHEDULED,
-      reason
-    }
-  });
+  try {
+    await prisma.$transaction(async tx => {
+      const [collision, block] = await Promise.all([
+        tx.appointment.findFirst({
+          where: {
+            companyId: company.id,
+            professionalId,
+            status: { not: AppointmentStatus.CANCELLED },
+            startsAt: { lt: endsAt },
+            endsAt: { gt: startsAt }
+          }
+        }),
+        tx.scheduleBlock.findFirst({
+          where: {
+            companyId: company.id,
+            professionalId,
+            startsAt: { lt: endsAt },
+            endsAt: { gt: startsAt }
+          }
+        })
+      ]);
+
+      if (collision || block) throw new Error("SLOT_TAKEN");
+
+      await tx.appointment.create({
+        data: {
+          companyId: company.id,
+          professionalId: professional.id,
+          patientId: patient.id,
+          startsAt,
+          endsAt,
+          status: AppointmentStatus.SCHEDULED,
+          reason
+        }
+      });
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    });
+  } catch {
+    redirect(`/agendar/${slug}/horarios?profissional=${professional.id}&date=${date}&erro=ocupado`);
+  }
 
   redirect(`/paciente/${slug}?sucesso=agendado`);
 }
@@ -637,7 +774,7 @@ export async function resetPasswordAction(formData: FormData) {
   if (!reset || reset.usedAt || reset.expiresAt < new Date()) redirect("/login?erro=token");
   const passwordHash=await bcrypt.hash(password,10);
   await prisma.$transaction([
-    prisma.user.update({where:{id:reset.userId},data:{passwordHash}}),
+    prisma.user.update({where:{id:reset.userId},data:{passwordHash,mustChangePassword:false}}),
     prisma.passwordResetToken.update({where:{id:reset.id},data:{usedAt:new Date()}}),
     prisma.session.deleteMany({where:{userId:reset.userId}})
   ]);

@@ -14,7 +14,12 @@ const typeLabels: Record<string,string> = {
 
 const weekdays = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 
-export default async function ProfessionalsPage() {
+export default async function ProfessionalsPage({
+  searchParams
+}: {
+  searchParams: Promise<Record<string,string|undefined>>;
+}) {
+  const query = await searchParams;
   const { user, companyId } = await requireCompany();
   const [professionals, specialties] = await Promise.all([
     prisma.professional.findMany({
@@ -29,6 +34,14 @@ export default async function ProfessionalsPage() {
 
   return (
     <div>
+      {query.convite && query.email && (
+        <div className="alert alert-success invitation-box">
+          <strong>Profissional criado com sucesso.</strong>
+          <p>Login: {query.email}</p>
+          <p>Envie este link para o profissional criar a própria senha:</p>
+          <code>{`${process.env.NEXT_PUBLIC_APP_URL ?? ""}/redefinir-senha?token=${query.convite}`}</code>
+        </div>
+      )}
       <div className="page-header">
         <div><span className="eyebrow">Equipe clínica</span><h1>Profissionais</h1><p>Médicos, dentistas, fisioterapeutas e demais profissionais.</p></div>
       </div>
@@ -58,7 +71,7 @@ export default async function ProfessionalsPage() {
               <label>Registro<input name="registrationNumber" /></label>
               <label>Duração (min)<input name="appointmentDuration" type="number" defaultValue={30} min={10} /></label>
               <label>E-mail de acesso<input name="email" type="email" required /></label>
-            <label>Senha provisória<input name="password" type="password" minLength={8} required placeholder="Mínimo 8 caracteres" /></label>
+            
               <label>Telefone<input name="phone" /></label>
               <button className="btn btn-primary span-2">Cadastrar profissional</button>
             </form>

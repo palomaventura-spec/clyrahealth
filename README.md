@@ -1,34 +1,61 @@
-# ClyraHealth v1.0.0 — Commercial Release
+# ClyraHealth v1.0.2 — Regra Definitiva
 
-Plataforma SaaS para consultórios, clínicas e operações de saúde. O mesmo produto atende desde um profissional único até equipes maiores; os planos variam por escala e recursos premium.
+## Atualização do projeto atual
 
-## Módulos
-Agenda, pacientes, portal do paciente, profissionais, atendimento clínico, documentos, comunicação, WhatsApp premium, IA premium, equipe, auditoria, planos e Super Admin.
+IMPORTANTE: se seu Neon já contém clínicas/pacientes de teste, NÃO execute `npm run db:seed`.
 
-## Perfis demo
-- Owner: `admin@demo.com` / `12345678`
-- Recepção: `recepcao@demo.com` / `12345678`
-- Dra. Ana: `ana@demo.com` / `12345678`
-- Dr. Lucas: `lucas@demo.com` / `12345678`
-- Carla: `carla@demo.com` / `12345678`
-- Super Admin: `ceo@clyrahealth.local` / `12345678`
-
-## Desenvolvimento local
-Copie `.env.example` para `.env` e mantenha `DATABASE_URL="file:./dev.db"`.
+Use:
 
 ```bash
-npm install
+npm install --ignore-scripts
 npx prisma generate
-npm run db:push
-npm run db:seed
+npx prisma db push
 npm run dev
 ```
 
-### Comunicação/IA sem custo
-```env
-WHATSAPP_PROVIDER="mock"
-AI_PROVIDER="mock"
+Depois:
+
+```bash
+git add .
+git commit -m "release: clyrahealth v1.0.2"
+git push origin main
 ```
 
-## Antes de produção
-O SQLite desta distribuição é apenas para desenvolvimento/homologação local. Para dados reais, migre o datasource Prisma para PostgreSQL gerenciado e execute revisão de segurança/LGPD. Consulte `docs/LAUNCH_CHECKLIST.md`.
+## Vercel
+
+Mantenha:
+```env
+DATABASE_URL="postgresql://..."
+NEXT_PUBLIC_APP_URL="https://SEU-PROJETO.vercel.app"
+WHATSAPP_PROVIDER="mock"
+AI_PROVIDER="mock"
+BILLING_PROVIDER="none"
+TRIAL_DAYS="7"
+```
+
+## Fluxo de profissionais
+
+Owner cadastra profissional -> ClyraHealth cria User + Professional -> mostra link de ativação -> profissional define a própria senha -> login pela página da clínica.
+
+## Fluxo de equipe
+
+Owner/Admin cria ADMIN ou RECEPÇÃO -> ClyraHealth mostra link de ativação -> usuário define senha própria.
+
+## Não rodar seed em produção
+O seed é apenas para ambiente demo/desenvolvimento e pode apagar dados existentes.
+
+
+## v1.0.3 — Painel CEO
+
+Após substituir os arquivos:
+
+```bash
+npm install --ignore-scripts
+npx prisma generate
+npx prisma db push
+npm run dev
+```
+
+**Não execute `npm run db:seed` no Neon atual.**
+
+A v1.0.3 adiciona `Company.active`, portanto `npx prisma db push` é necessário.

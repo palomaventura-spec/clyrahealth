@@ -4,6 +4,7 @@ import { patientBookAppointmentAction } from "@/app/actions";
 import { getPatientForCompany } from "@/lib/patient-auth";
 import { prisma } from "@/lib/prisma";
 import { getAvailableSlots } from "@/lib/slots";
+import { PublicBookingSlots } from "@/components/PublicBookingSlots";
 
 export default async function BookingSlotsPage({
   params,
@@ -67,17 +68,17 @@ export default async function BookingSlotsPage({
             </div>
 
             {slots.length > 0 ? (
-              <div className="slot-grid">
-                {slots.map(time => (
-                  <form action={patientBookAppointmentAction} key={time}>
-                    <input type="hidden" name="slug" value={slug}/>
-                    <input type="hidden" name="professionalId" value={selected.id}/>
-                    <input type="hidden" name="date" value={date}/>
-                    <input type="hidden" name="time" value={time}/>
-                    <button className="slot-button">{time}</button>
-                  </form>
-                ))}
-              </div>
+              <PublicBookingSlots
+                slots={slots.map(time => ({ value: time, label: time }))}
+                professionalName={selected.name}
+                dateLabel={date}
+                action={patientBookAppointmentAction}
+                hiddenFields={{
+                  slug,
+                  professionalId: selected.id,
+                  date
+                }}
+              />
             ) : (
               <div className="empty-state">Nenhum horário livre para esta data.</div>
             )}

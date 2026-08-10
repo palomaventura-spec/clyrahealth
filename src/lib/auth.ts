@@ -43,7 +43,7 @@ export async function getCurrentUser() {
     include: {
       user: {
         include: {
-          company: true,
+          company: { include: { subscription: true } },
           professional: true
         }
       }
@@ -68,4 +68,28 @@ export async function requireCompany() {
 
 export function canManage(role: string) {
   return ["OWNER", "ADMIN"].includes(role);
+}
+
+
+export async function requireActiveCompany() {
+  const { user, companyId } = await requireCompany();
+  const subscription = user.company?.subscription;
+
+  if (user.role === "OWNER") {
+    if (subscription?.status === "TRIAL" && subscription.trialEnds && subscription.trialEnds < new Date()) {
+      redirect("/assinatura?trial=expirado");
+    }
+    if (["PAST_DUE", "CANCELLED"].includes(subscription?.status ?? "")) {
+      redirect("/assinatura?bloqueado=1");
+    }
+  } else {
+    if (
+      (subscription?.status === "TRIAL" && subscription.trialEnds && subscription.trialEnds < new Date()) ||
+      ["PAST_DUE", "CANCELLED"].includes(subscription?.status ?? "")
+    ) {
+      redirect(`/acesso/${user.company?.slug}?erro=assinatura`);
+    }
+  }
+
+  return { user, companyId };
 }
