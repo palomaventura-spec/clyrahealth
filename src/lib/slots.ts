@@ -1,36 +1,61 @@
 import { prisma } from "@/lib/prisma";
+import { weekdayInTimeZone, zonedDateTimeToUtc } from "@/lib/timezone";
 
-function hhmmToMinutes(value: string) {
-  const [h, m] = value.split(":").map(Number);
-  return h * 60 + m;
+function hhmmToMinutes(value: string): number {
+  const [hour, minute] = value.split(":").map(Number);
+  return hour * 60 + minute;
 }
 
-function minutesToHHMM(value: number) {
-  const h = Math.floor(value / 60).toString().padStart(2, "0");
-  const m = (value % 60).toString().padStart(2, "0");
-  return `${h}:${m}`;
+function minutesToHHMM(value: number): string {
+  const hour = Math.floor(value / 60).toString().padStart(2, "0");
+  const minute = (value % 60).toString().padStart(2, "0");
+  return `${hour}:${minute}`;
 }
 
 export async function getAvailableSlots(
   companyId: string,
   professionalId: string,
   date: string
-) {
+): Promise<string[]> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
+
   const professional = await prisma.professional.findFirst({
-    where: { id: professionalId, companyId, active: true },
-    include: { availabilities: true }
+    where: {
+      id: professionalId,
+      companyId,
+      active: true
+    },
+    select: {
+      id: true,
+      appointmentDuration: true
+    }
   });
+
   if (!professional) return [];
 
-  const localDate = new Date(`${date}T12:00:00`);
-  if (Number.isNaN(localDate.getTime())) return [];
-  const weekday = localDate.getDay();
+  // Piloto BR: usamos o fuso padrão diretamente para não depender
+  // do tipo Company do Prisma Client que pode estar desatualizado localmente.
+  const timeZone = "America/Sao_Paulo";
+  const weekday = weekdayInTimeZone(date, timeZone);
 
-  const availability = professional.availabilities.find(a => a.weekday === weekday);
-  if (!availability) return [];
+  const periods = await prisma.availability.findMany({
+    where: {
+      professionalId,
+      weekday
+    },
+    select: {
+      startTime: true,
+      endTime: true
+    },
+    orderBy: {
+      startTime: "asc"
+    }
+  });
 
-  const dayStart = new Date(`${date}T00:00:00`);
-  const dayEnd = new Date(`${date}T23:59:59`);
+  if (periods.length === 0) return [];
+
+  const dayStart = zonedDateTimeToUtc(date, "00:00", timeZone);
+  const dayEnd = zonedDateTimeToUtc(date, "23:59", timeZone);
 
   const [appointments, blocks] = await Promise.all([
     prisma.appointment.findMany({
@@ -39,7 +64,8 @@ export async function getAvailableSlots(
         professionalId,
         status: { not: "CANCELLED" },
         startsAt: { gte: dayStart, lte: dayEnd }
-      }
+      },
+      select: { startsAt: true, endsAt: true }
     }),
     prisma.scheduleBlock.findMany({
       where: {
@@ -47,26 +73,41 @@ export async function getAvailableSlots(
         professionalId,
         startsAt: { lte: dayEnd },
         endsAt: { gte: dayStart }
-      }
+      },
+      select: { startsAt: true, endsAt: true }
     })
   ]);
 
   const duration = professional.appointmentDuration;
-  const start = hhmmToMinutes(availability.startTime);
-  const end = hhmmToMinutes(availability.endTime);
+  if (!Number.isFinite(duration) || duration <= 0) return [];
+
   const now = new Date();
+  const result = new Set<string>();
 
-  const result: string[] = [];
-  for (let cursor = start; cursor + duration <= end; cursor += duration) {
-    const hhmm = minutesToHHMM(cursor);
-    const slotStart = new Date(`${date}T${hhmm}:00`);
-    const slotEnd = new Date(slotStart.getTime() + duration * 60000);
-    if (slotStart <= now) continue;
+  for (const period of periods) {
+    const start = hhmmToMinutes(period.startTime);
+    const end = hhmmToMinutes(period.endTime);
 
-    const busy = appointments.some(a => a.startsAt < slotEnd && a.endsAt > slotStart);
-    const blocked = blocks.some(b => b.startsAt < slotEnd && b.endsAt > slotStart);
-    if (!busy && !blocked) result.push(hhmm);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) continue;
+
+    for (let cursor = start; cursor + duration <= end; cursor += duration) {
+      const hhmm = minutesToHHMM(cursor);
+      const slotStart = zonedDateTimeToUtc(date, hhmm, timeZone);
+      const slotEnd = new Date(slotStart.getTime() + duration * 60_000);
+
+      if (slotStart <= now) continue;
+
+      const busy = appointments.some(
+        appointment => appointment.startsAt < slotEnd && appointment.endsAt > slotStart
+      );
+
+      const blocked = blocks.some(
+        block => block.startsAt < slotEnd && block.endsAt > slotStart
+      );
+
+      if (!busy && !blocked) result.add(hhmm);
+    }
   }
 
-  return result;
+  return Array.from(result).sort((a, b) => a.localeCompare(b));
 }

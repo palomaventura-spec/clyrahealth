@@ -1,110 +1,39 @@
-import { createAvailabilityAction, createProfessionalAction, createSpecialtyAction } from "@/app/actions";
+import Link from "next/link";
+import { createProfessionalAction } from "@/app/actions";
 import { prisma } from "@/lib/prisma";
 import { canManage, requireCompany } from "@/lib/auth";
+import { PendingSubmitButton } from "@/components/PendingSubmitButton";
+import { ProfessionalScheduleFields } from "@/components/ProfessionalScheduleFields";
+import { ProfessionalClinicalFields, PROFESSIONAL_TYPES } from "@/components/ProfessionalClinicalFields";
 
-const typeLabels: Record<string,string> = {
-  DOCTOR: "Médico(a)",
-  DENTIST: "Dentista",
-  PHYSIOTHERAPIST: "Fisioterapeuta",
-  PSYCHOLOGIST: "Psicólogo(a)",
-  NUTRITIONIST: "Nutricionista",
-  SPEECH_THERAPIST: "Fonoaudiólogo(a)",
-  OTHER: "Outro"
-};
-
-const weekdays = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
-
-export default async function ProfessionalsPage({
-  searchParams
-}: {
-  searchParams: Promise<Record<string,string|undefined>>;
-}) {
-  const query = await searchParams;
-  const { user, companyId } = await requireCompany();
-  const [professionals, specialties] = await Promise.all([
-    prisma.professional.findMany({
-      where: { companyId },
-      include: { specialty: true, availabilities: true },
-      orderBy: { name: "asc" }
-    }),
-    prisma.specialty.findMany({ where: { companyId }, orderBy: { name: "asc" } })
-  ]);
-
-  const manage = canManage(user.role);
-
-  return (
-    <div>
-      {query.convite && query.email && (
-        <div className="alert alert-success invitation-box">
-          <strong>Profissional criado com sucesso.</strong>
-          <p>Login: {query.email}</p>
-          <p>Envie este link para o profissional criar a própria senha:</p>
-          <code>{`${process.env.NEXT_PUBLIC_APP_URL ?? ""}/redefinir-senha?token=${query.convite}`}</code>
-        </div>
-      )}
-      <div className="page-header">
-        <div><span className="eyebrow">Equipe clínica</span><h1>Profissionais</h1><p>Médicos, dentistas, fisioterapeutas e demais profissionais.</p></div>
-      </div>
-
-      {manage && (
-        <div className="two-columns">
-          <section className="card section-card">
-            <h2>Nova especialidade</h2>
-            <form action={createSpecialtyAction} className="inline-form">
-              <input name="name" placeholder="Ex.: Cardiologia" required />
-              <button className="btn btn-secondary">Adicionar</button>
-            </form>
-          </section>
-          <section className="card section-card">
-            <h2>Novo profissional</h2>
-            <form action={createProfessionalAction} className="form-grid">
-              <label>Nome<input name="name" required /></label>
-              <label>Profissão
-                <select name="type" defaultValue="DOCTOR">
-                  {Object.entries(typeLabels).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </label>
-              <label>Especialidade
-                <select name="specialtyId"><option value="">Sem especialidade</option>{specialties.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
-              </label>
-              <label>Conselho<input name="council" placeholder="CRM, CRO, CREFITO..." /></label>
-              <label>Registro<input name="registrationNumber" /></label>
-              <label>Duração (min)<input name="appointmentDuration" type="number" defaultValue={30} min={10} /></label>
-              <label>E-mail de acesso<input name="email" type="email" required /></label>
-            
-              <label>Telefone<input name="phone" /></label>
-              <button className="btn btn-primary span-2">Cadastrar profissional</button>
-            </form>
-          </section>
-        </div>
-      )}
-
-      <div className="cards-grid">
-        {professionals.map((p) => (
-          <div className="card professional-card" key={p.id}>
-            <div className="avatar">{p.name.slice(0,2).toUpperCase()}</div>
-            <div>
-              <h3>{p.name}</h3>
-              <p>{typeLabels[p.type]} · {p.specialty?.name ?? "Sem especialidade"}</p>
-              <small>{p.council ?? ""} {p.registrationNumber ?? ""}</small>
-              {p.publicSlug && <a className="professional-public-link" href={`/agendar/${user.company?.slug}?profissional=${p.publicSlug}`} target="_blank">Link público →</a>}
-            </div>
-            <div className="availability-list">
-              {p.availabilities.map(a => <span key={a.id}>{weekdays[a.weekday]} {a.startTime}–{a.endTime}</span>)}
-              {p.availabilities.length === 0 && <small>Disponibilidade ainda não configurada.</small>}
-            </div>
-            {manage && (
-              <form action={createAvailabilityAction} className="availability-form">
-                <input type="hidden" name="professionalId" value={p.id}/>
-                <select name="weekday" defaultValue="1">{weekdays.map((w,i) => <option key={i} value={i}>{w}</option>)}</select>
-                <input name="startTime" type="time" defaultValue="09:00" required/>
-                <input name="endTime" type="time" defaultValue="17:00" required/>
-                <button className="btn btn-small btn-secondary">+ horário</button>
-              </form>
-            )}
-          </div>
-        ))}
-      </div>
+const typeLabels = Object.fromEntries(PROFESSIONAL_TYPES) as Record<string,string>;
+const weekdays=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+export default async function ProfessionalsPage({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){
+  const query=await searchParams; const {user,companyId}=await requireCompany();
+  const professionals=await prisma.professional.findMany({where:{companyId},include:{specialty:true,availabilities:true},orderBy:{name:"asc"}});
+  const manage=canManage(user.role);
+  return <div>
+    {query.convite&&query.email&&<div className="alert alert-success invitation-box"><strong>✓ Profissional criado com sucesso.</strong><p>Login: {query.email}</p><p>Envie este link para o profissional criar a senha:</p><code>{`${process.env.NEXT_PUBLIC_APP_URL??""}/redefinir-senha?token=${query.convite}`}</code></div>}
+    {query.erro==="email"&&<div className="alert alert-error">Este e-mail já está vinculado a um usuário.</div>}
+    <div className="page-header"><div><span className="eyebrow">Equipe clínica</span><h1>Profissionais</h1><p>Cadastre cada profissional com profissão, especialidade e agenda próprias.</p></div></div>
+    {manage&&<section className="card section-card professional-create-section"><h2>Novo profissional</h2>
+      <form action={createProfessionalAction} className="form-grid professional-form">
+        <label>Nome<input name="name" required/></label>
+        <label>E-mail de acesso<input name="email" type="email" required/></label>
+        <ProfessionalClinicalFields/>
+        <label>Conselho<input name="council" placeholder="CRM, CRO, CREFITO..."/></label><label>Registro<input name="registrationNumber"/></label>
+        <label>Duração da consulta (min)<input name="appointmentDuration" type="number" defaultValue={30} min={10} step={5}/></label>
+        <label>Telefone<input name="phone"/></label>
+        <div className="span-2 schedule-highlight"><ProfessionalScheduleFields/></div>
+        <PendingSubmitButton idle="Cadastrar profissional" pending="Cadastrando profissional..." className="btn btn-primary span-2"/>
+      </form>
+    </section>}
+    <div className="cards-grid">
+      {professionals.map(p=><div className="card professional-card" key={p.id}>
+        <div className="avatar">{p.name.slice(0,2).toUpperCase()}</div><div><h3>{p.name}</h3><p>{typeLabels[p.type]} · {p.specialty?.name??"Sem especialidade"}</p><small>{p.council??""} {p.registrationNumber??""}</small>{p.publicSlug&&<a className="professional-public-link" href={`/agendar/${user.company?.slug}?profissional=${p.publicSlug}`} target="_blank">Link público →</a>}</div>
+        <div className="availability-list">{p.availabilities.sort((a,b)=>a.weekday-b.weekday||a.startTime.localeCompare(b.startTime)).map(a=><span key={a.id}>{weekdays[a.weekday]} {a.startTime}–{a.endTime}</span>)}{p.availabilities.length===0&&<small>Disponibilidade ainda não configurada.</small>}</div>
+        {(manage||(user.role==="PROFESSIONAL"&&user.professional?.id===p.id))&&<Link className="btn btn-small btn-secondary" href={`/profissionais/${p.id}/editar`}>{user.role==="PROFESSIONAL"?"Editar minha agenda":"Editar profissional e agenda"}</Link>}
+      </div>)}
     </div>
-  );
+  </div>;
 }

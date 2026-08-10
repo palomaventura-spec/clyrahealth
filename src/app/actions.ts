@@ -9,6 +9,7 @@ import { AppointmentStatus, ProfessionalType, UserRole, Prisma } from "@prisma/c
 import { createPatientSession, destroyPatientSession, getPatientForCompany } from "@/lib/patient-auth";
 import { getAvailableSlots } from "@/lib/slots";
 import { audit } from "@/lib/audit";
+import { zonedDateTimeToUtc } from "@/lib/timezone";
 import crypto from "node:crypto";
 
 function slugify(value: string) {
@@ -18,6 +19,20 @@ function slugify(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+
+function parseAvailabilityForm(formData: FormData) {
+  const rows: { weekday:number; startTime:string; endTime:string }[] = [];
+  for (const weekday of [0,1,2,3,4,5,6]) {
+    if (String(formData.get(`availability_${weekday}_enabled`) || "") !== "on") continue;
+    for (const period of [1,2]) {
+      const startTime = String(formData.get(`availability_${weekday}_start${period}`) || "");
+      const endTime = String(formData.get(`availability_${weekday}_end${period}`) || "");
+      if (startTime && endTime && startTime < endTime) rows.push({ weekday, startTime, endTime });
+    }
+  }
+  return rows;
 }
 
 export async function loginAction(formData: FormData) {
@@ -61,52 +76,21 @@ export async function logoutAction() {
 }
 
 export async function registerCompanyAction(formData: FormData) {
-  const companyName = String(formData.get("companyName") || "").trim();
-  const name = String(formData.get("name") || "").trim();
-  const email = String(formData.get("email") || "").trim().toLowerCase();
-  const password = String(formData.get("password") || "");
-
-  if (!companyName || !name || !email || password.length < 8) {
-    redirect("/cadastro?erro=dados");
-  }
-
-  if (await prisma.user.findUnique({ where: { email } })) {
-    redirect("/cadastro?erro=email");
-  }
-
-  let slug = slugify(companyName) || "clinica";
-  let suffix = 1;
-  while (await prisma.company.findUnique({ where: { slug } })) {
-    slug = `${slugify(companyName)}-${suffix++}`;
-  }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-
-  const company = await prisma.company.create({
-    data: {
-      name: companyName,
-      slug,
-      users: {
-        create: {
-          name,
-          email,
-          passwordHash,
-          role: UserRole.OWNER
-        }
-      },
-      subscription: {
-        create: {
-          plan: "TRIAL",
-          status: "TRIAL",
-          trialEnds: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
-        }
-      }
-    },
-    include: { users: true }
-  });
-
+  const companyName=String(formData.get("companyName")||"").trim(); const name=String(formData.get("name")||"").trim();
+  const email=String(formData.get("email")||"").trim().toLowerCase(); const password=String(formData.get("password")||"");
+  if(!companyName||!name||!email||password.length<8) redirect("/cadastro?erro=dados");
+  if(await prisma.user.findUnique({where:{email}})) redirect(`/cadastro?erro=email&email=${encodeURIComponent(email)}`);
+  let slug=slugify(companyName)||"clinica",suffix=1; const base=slug;
+  while(await prisma.company.findUnique({where:{slug}})) slug=`${base}-${suffix++}`;
+  const passwordHash=await bcrypt.hash(password,10); const now=new Date(); const trialEnds=new Date(now.getTime()+7*86400000);
+  const company=await prisma.company.create({data:{
+    name:companyName, publicName:companyName, slug,
+    users:{create:{name,email,passwordHash,role:UserRole.OWNER}},
+    subscription:{create:{plan:"TRIAL",status:"TRIAL",trialStartedAt:now,trialEnds}},
+    billingSettings:{create:{provider:"NONE",environment:"SANDBOX",enabled:false}}
+  },include:{users:true}});
   await createSession(company.users[0].id);
-  redirect("/onboarding");
+  redirect("/onboarding?cadastro=sucesso");
 }
 
 export async function completeOnboardingAction(formData: FormData) {
@@ -139,81 +123,46 @@ export async function createSpecialtyAction(formData: FormData) {
 }
 
 export async function createProfessionalAction(formData: FormData) {
-  const { user, companyId } = await requireCompany();
-  if (!["OWNER", "ADMIN"].includes(user.role)) return;
-
-  const name = String(formData.get("name") || "").trim();
-  const email = String(formData.get("email") || "").trim().toLowerCase();
-  const type = String(formData.get("type") || "OTHER") as ProfessionalType;
-  const specialtyId = String(formData.get("specialtyId") || "") || null;
-  const duration = Number(formData.get("appointmentDuration") || 30);
-
-  if (!name || !email) return;
-  if (await prisma.user.findUnique({ where: { email } })) {
-    redirect("/profissionais?erro=email");
-  }
-
-  const publicSlugBase = slugify(name) || "profissional";
-  let publicSlug = publicSlugBase;
-  let suffix = 1;
-  while (await prisma.professional.findFirst({ where: { companyId, publicSlug } })) {
-    publicSlug = `${publicSlugBase}-${suffix++}`;
-  }
-
-  const randomPassword = crypto.randomBytes(32).toString("hex");
-  const passwordHash = await bcrypt.hash(randomPassword, 10);
-  const inviteToken = crypto.randomBytes(32).toString("hex");
-
-  const professionalUser = await prisma.$transaction(async tx => {
-    const createdUser = await tx.user.create({
-      data: {
-        name,
-        email,
-        passwordHash,
-        role: "PROFESSIONAL",
-        companyId,
-        mustChangePassword: true
-      }
-    });
-
-    await tx.professional.create({
-      data: {
-        name,
-        publicSlug,
-        type,
-        specialtyId,
-        companyId,
-        userId: createdUser.id,
-        email,
-        phone: String(formData.get("phone") || "") || null,
-        council: String(formData.get("council") || "") || null,
-        registrationNumber: String(formData.get("registrationNumber") || "") || null,
-        appointmentDuration: Number.isFinite(duration) ? duration : 30
-      }
-    });
-
-    await tx.passwordResetToken.create({
-      data: {
-        token: inviteToken,
-        userId: createdUser.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        inviteKind: "PROFESSIONAL_INVITE"
-      }
-    });
-
+  const {user,companyId}=await requireCompany(); if(!["OWNER","ADMIN"].includes(user.role)) return;
+  const name=String(formData.get("name")||"").trim(); const email=String(formData.get("email")||"").trim().toLowerCase();
+  const type=String(formData.get("type")||"OTHER") as ProfessionalType; let specialtyId=String(formData.get("specialtyId")||"")||null;
+  const newSpecialtyName=String(formData.get("newSpecialtyName")||formData.get("specialtyPreset")||"").trim(); const duration=Number(formData.get("appointmentDuration")||30);
+  if(!name||!email) return; if(await prisma.user.findUnique({where:{email}})) redirect("/profissionais?erro=email");
+  if(newSpecialtyName){ const sp=await prisma.specialty.upsert({where:{companyId_name:{companyId,name:newSpecialtyName}},update:{},create:{companyId,name:newSpecialtyName}}); specialtyId=sp.id; }
+  const base=slugify(name)||"profissional"; let publicSlug=base,suffix=1; while(await prisma.professional.findFirst({where:{companyId,publicSlug}})) publicSlug=`${base}-${suffix++}`;
+  const passwordHash=await bcrypt.hash(crypto.randomBytes(32).toString("hex"),10); const inviteToken=crypto.randomBytes(32).toString("hex");
+  const availabilities=parseAvailabilityForm(formData);
+  const professionalUser=await prisma.$transaction(async tx=>{
+    const createdUser=await tx.user.create({data:{name,email,passwordHash,role:"PROFESSIONAL",companyId,mustChangePassword:true}});
+    await tx.professional.create({data:{name,publicSlug,type,specialtyId,companyId,userId:createdUser.id,email,
+      phone:String(formData.get("phone")||"")||null,council:String(formData.get("council")||"")||null,
+      registrationNumber:String(formData.get("registrationNumber")||"")||null,appointmentDuration:Number.isFinite(duration)?duration:30,
+      availabilities:{create:availabilities}}});
+    await tx.passwordResetToken.create({data:{token:inviteToken,userId:createdUser.id,expiresAt:new Date(Date.now()+7*86400000),inviteKind:"PROFESSIONAL_INVITE"}});
     return createdUser;
   });
-
-  await audit({
-    action: "CREATE",
-    entityType: "Professional",
-    entityId: professionalUser.id,
-    companyId,
-    userId: user.id,
-    description: `Profissional ${name} criado com convite de acesso`
-  });
-
+  await audit({action:"CREATE",entityType:"Professional",entityId:professionalUser.id,companyId,userId:user.id,description:`Profissional ${name} criado com agenda e convite`});
   redirect(`/profissionais?convite=${inviteToken}&email=${encodeURIComponent(email)}&sucesso=1`);
+}
+
+export async function updateProfessionalAction(formData: FormData) {
+  const {user,companyId}=await requireCompany(); const id=String(formData.get("id")||"");
+  const professional=await prisma.professional.findFirst({where:{id,companyId},include:{user:true}}); if(!professional) return;
+  const allowed=["OWNER","ADMIN"].includes(user.role)||(user.role==="PROFESSIONAL"&&user.professional?.id===id); if(!allowed) return;
+  let specialtyId=String(formData.get("specialtyId")||"")||null; const newSpecialtyName=String(formData.get("newSpecialtyName")||formData.get("specialtyPreset")||"").trim();
+  if(newSpecialtyName){const sp=await prisma.specialty.upsert({where:{companyId_name:{companyId,name:newSpecialtyName}},update:{},create:{companyId,name:newSpecialtyName}});specialtyId=sp.id;}
+  const availabilities=parseAvailabilityForm(formData); const duration=Number(formData.get("appointmentDuration")||professional.appointmentDuration);
+  await prisma.$transaction(async tx=>{
+    await tx.availability.deleteMany({where:{professionalId:id}});
+    await tx.professional.update({where:{id},data:{
+      name:String(formData.get("name")||professional.name).trim(),type:String(formData.get("type")||professional.type) as ProfessionalType,
+      specialtyId,council:String(formData.get("council")||"")||null,registrationNumber:String(formData.get("registrationNumber")||"")||null,
+      phone:String(formData.get("phone")||"")||null,appointmentDuration:Number.isFinite(duration)?duration:30,
+      availabilities:{create:availabilities}
+    }});
+  });
+  await audit({action:"UPDATE",entityType:"Professional",entityId:id,companyId,userId:user.id,description:"Cadastro e agenda do profissional atualizados"});
+  redirect(`/profissionais/${id}/editar?sucesso=1`);
 }
 
 export async function createPatientAction(formData: FormData) {
@@ -278,7 +227,8 @@ export async function createAppointmentAction(formData: FormData) {
 
   if (!professional || !patient || !date || !time) return;
 
-  const startsAt = new Date(`${date}T${time}:00`);
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { timezone: true } });
+  const startsAt = zonedDateTimeToUtc(date, time, company?.timezone ?? "America/Sao_Paulo");
   const endsAt = new Date(startsAt.getTime() + professional.appointmentDuration * 60000);
 
   try {
@@ -428,7 +378,7 @@ export async function publicBookingAction(formData: FormData) {
     });
   }
 
-  const startsAt = new Date(`${date}T${time}:00`);
+  const startsAt = zonedDateTimeToUtc(date, time, company.timezone ?? "America/Sao_Paulo");
   const endsAt = new Date(startsAt.getTime() + professional.appointmentDuration * 60000);
 
   const collision = await prisma.appointment.findFirst({

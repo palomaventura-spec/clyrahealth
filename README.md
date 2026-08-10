@@ -59,3 +59,16 @@ npm run dev
 **Não execute `npm run db:seed` no Neon atual.**
 
 A v1.0.3 adiciona `Company.active`, portanto `npx prisma db push` é necessário.
+
+
+## v1.0.4 — Correções do Piloto
+
+Atualização recomendada:
+```bash
+npm install next@15.5.21
+npx prisma generate
+npx prisma db push
+npm run dev
+```
+
+Não execute `npm run db:seed` no Neon existente.
