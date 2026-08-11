@@ -63,6 +63,7 @@ export default async function ProfessionalsPage({searchParams}:{searchParams:Pro
         <label>Conselho<input name="council" placeholder="CRM, CRO, CREFITO..."/></label>
         <label>Registro profissional<input name="registrationNumber"/></label>
         <label>Duração da consulta (min)<input name="appointmentDuration" type="number" defaultValue={30} min={10} max={240} step={5} required/></label>
+        <label>Valor padrão da consulta (R$)<input name="standardPrice" inputMode="decimal" placeholder="Ex.: 250,00"/></label>
         <label>Telefone<input name="phone"/></label>
 
         <div className="span-2 schedule-highlight">

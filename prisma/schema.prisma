@@ -35,6 +35,24 @@ enum AppointmentStatus {
   NO_SHOW
 }
 
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  PIX
+  CREDIT_CARD
+  DEBIT_CARD
+  TRANSFER
+  INSURANCE
+  OTHER
+}
+
 enum SubscriptionStatus {
   TRIAL
   ACTIVE
@@ -235,6 +253,7 @@ model Professional {
   registrationNumber  String?
   bio                 String?
   appointmentDuration Int                @default(30)
+  standardPriceCents  Int                @default(0)
   active              Boolean            @default(true)
   companyId           String
   company             Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -344,6 +363,13 @@ model Appointment {
   status            AppointmentStatus  @default(SCHEDULED)
   reason            String?
   notes             String?
+  careType          String             @default("PRIVATE")
+  grossAmountCents  Int                @default(0)
+  discountCents     Int                @default(0)
+  finalAmountCents  Int                @default(0)
+  paymentStatus     PaymentStatus      @default(PENDING)
+  paymentMethod     PaymentMethod?
+  paidAt            DateTime?
   companyId         String
   company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   professionalId    String

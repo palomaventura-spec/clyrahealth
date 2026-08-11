@@ -206,6 +206,10 @@ export async function createProfessionalAction(formData: FormData) {
   let specialtyId = String(formData.get("specialtyId") || "") || null;
   const newSpecialtyName = String(formData.get("newSpecialtyName") || formData.get("specialtyPreset") || "").trim();
   const duration = Number(formData.get("appointmentDuration") || 30);
+  const standardPriceRaw = String(formData.get("standardPrice") || "").replace(",", ".");
+  const standardPriceCents = standardPriceRaw
+    ? Math.max(0, Math.round(Number(standardPriceRaw) * 100))
+    : 0;
   if (!name || !email) return;
 
   const existingUser = await prisma.user.findUnique({
@@ -260,6 +264,7 @@ export async function createProfessionalAction(formData: FormData) {
       council: String(formData.get("council") || "") || null,
       registrationNumber: String(formData.get("registrationNumber") || "") || null,
       appointmentDuration: Number.isFinite(duration) ? duration : 30,
+      standardPriceCents: Number.isFinite(standardPriceCents) ? standardPriceCents : 0,
       availabilities: { create: availabilities }
     }
   });
@@ -287,6 +292,10 @@ export async function updateProfessionalAction(formData: FormData) {
 
   const availabilities = parseAvailabilityForm(formData);
   const duration = Number(formData.get("appointmentDuration") || professional.appointmentDuration);
+  const standardPriceRaw = String(formData.get("standardPrice") || "").replace(",", ".");
+  const standardPriceCents = standardPriceRaw
+    ? Math.max(0, Math.round(Number(standardPriceRaw) * 100))
+    : professional.standardPriceCents;
 
   let specialtyId = professional.specialtyId;
   let type = professional.type;
@@ -323,6 +332,7 @@ export async function updateProfessionalAction(formData: FormData) {
         registrationNumber: manager ? String(formData.get("registrationNumber") || "") || null : professional.registrationNumber,
         phone: manager ? String(formData.get("phone") || "") || null : professional.phone,
         appointmentDuration: Number.isFinite(duration) && duration >= 10 ? duration : professional.appointmentDuration,
+        standardPriceCents: Number.isFinite(standardPriceCents) ? standardPriceCents : professional.standardPriceCents,
         availabilities: { create: availabilities }
       }
     });
@@ -407,6 +417,9 @@ export async function createAppointmentAction(formData: FormData) {
   const date = String(formData.get("date") || "");
   const time = String(formData.get("time") || "");
   const reason = String(formData.get("reason") || "") || null;
+  const careType = String(formData.get("careType") || "") || null;
+  const amountInput = String(formData.get("amount") || "").replace(",", ".");
+  const discountInput = String(formData.get("discount") || "").replace(",", ".");
 
   const professional = await prisma.professional.findFirst({
     where: { id: professionalId, companyId, active: true }
@@ -416,6 +429,19 @@ export async function createAppointmentAction(formData: FormData) {
   });
 
   if (!professional || !patient || !date || !time) return;
+
+  const grossAmountCents = amountInput
+    ? Math.max(0, Math.round(Number(amountInput) * 100))
+    : professional.standardPriceCents;
+  const safeGrossAmountCents = Number.isFinite(grossAmountCents) ? grossAmountCents : 0;
+  const discountCentsRaw = discountInput
+    ? Math.max(0, Math.round(Number(discountInput) * 100))
+    : 0;
+  const discountCents = Number.isFinite(discountCentsRaw)
+    ? Math.min(safeGrossAmountCents, discountCentsRaw)
+    : 0;
+  const finalAmountCents = Math.max(0, safeGrossAmountCents - discountCents);
+  const resolvedCareType = careType || patient.careType || "PRIVATE";
 
   const company = await prisma.company.findUnique({ where: { id: companyId }, select: { timezone: true } });
   const startsAt = zonedDateTimeToUtc(date, time, company?.timezone ?? "America/Sao_Paulo");
@@ -446,7 +472,18 @@ export async function createAppointmentAction(formData: FormData) {
       if (collision || block) throw new Error("SLOT_TAKEN");
 
       return tx.appointment.create({
-        data: { companyId, professionalId, patientId, startsAt, endsAt, reason }
+        data: {
+          companyId,
+          professionalId,
+          patientId,
+          startsAt,
+          endsAt,
+          reason,
+          careType: resolvedCareType,
+          grossAmountCents: safeGrossAmountCents,
+          discountCents,
+          finalAmountCents
+        }
       });
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable

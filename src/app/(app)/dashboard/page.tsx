@@ -20,7 +20,11 @@ export default async function Page(){
     where:{companyId,...professionalScope,startsAt:{gte:start,lte:end},status}
   });
 
-  const [professionals,patients,today,confirmed,arrived,inProgress,completed,cancelled,noShow,upcoming]=await Promise.all([
+  const financeVisible=["OWNER","ADMIN","PROFESSIONAL"].includes(user.role);
+  const monthStart=new Date(start.getFullYear(),start.getMonth(),1);
+  const nextMonth=new Date(start.getFullYear(),start.getMonth()+1,1);
+
+  const [professionals,patients,today,confirmed,arrived,inProgress,completed,cancelled,noShow,upcoming,financialAppointments]=await Promise.all([
     user.role==="PROFESSIONAL"
       ? Promise.resolve(1)
       : prisma.professional.count({where:{companyId,active:true}}),
@@ -34,8 +38,18 @@ export default async function Page(){
       orderBy:{startsAt:"asc"},
       take:6,
       include:{patient:true,professional:{include:{specialty:true}}}
-    })
+    }),
+    financeVisible
+      ? prisma.appointment.findMany({
+          where:{companyId,...professionalScope,startsAt:{gte:monthStart,lt:nextMonth},status:{not:"CANCELLED"}},
+          select:{finalAmountCents:true,paymentStatus:true,careType:true}
+        })
+      : Promise.resolve([])
   ]);
+
+  const monthExpected=financialAppointments.reduce((s,a)=>s+a.finalAmountCents,0);
+  const monthReceived=financialAppointments.filter(a=>a.paymentStatus==="PAID").reduce((s,a)=>s+a.finalAmountCents,0);
+  const money=(cents:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(cents/100);
 
   return <div>
     <div className="page-header">
@@ -52,6 +66,7 @@ export default async function Page(){
       <StatCard label="Faltas" value={noShow}/>
       <StatCard label="Pacientes" value={patients} detail={user.role==="PROFESSIONAL"?"vinculados aos seus atendimentos":`${professionals} profissionais ativos`}/>
     </div>
+    {financeVisible&&<section className="card section-card"><div className="section-title"><div><h2>{user.role==="PROFESSIONAL"?"Meu resumo financeiro":"Resumo financeiro do mês"}</h2><p>Valores administrativos das consultas.</p></div><a href="/financeiro" className="btn btn-secondary">Ver financeiro</a></div><div className="finance-split"><div><span>Previsto</span><strong>{money(monthExpected)}</strong></div><div><span>Recebido</span><strong>{money(monthReceived)}</strong></div><div><span>Pendente</span><strong>{money(Math.max(0,monthExpected-monthReceived))}</strong></div></div></section>}
     <section className="card section-card">
       <h2>Próximos atendimentos</h2>
       <div className="table-wrap"><table>

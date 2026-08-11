@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   Bot, CalendarDays, ClipboardPlus, FileText, LayoutDashboard, LogOut,
-  MessageCircle, Settings, ShieldCheck, Stethoscope, UserCog, Users, ListPlus, BookOpen
+  MessageCircle, Settings, ShieldCheck, Stethoscope, UserCog, Users, ListPlus, BookOpen, WalletCards
 } from "lucide-react";
 import { logoutAction } from "@/app/actions";
 import { requireUser } from "@/lib/auth";
@@ -50,6 +50,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         {clinicalMenu && <Link href="/documentos"><FileText size={18}/> Documentos</Link>}
         <Link href="/profissionais"><Stethoscope size={18}/> Profissionais</Link>
         <Link href="/pacientes"><Users size={18}/> Pacientes</Link>
+        {["OWNER","ADMIN","PROFESSIONAL"].includes(user.role) && <Link href="/financeiro"><WalletCards size={18}/> Financeiro</Link>}
         {["OWNER","ADMIN"].includes(user.role) && <Link href="/equipe"><UserCog size={18}/> Equipe</Link>}
         {["OWNER","ADMIN"].includes(user.role) && <Link href="/comunicacao"><MessageCircle size={18}/> Comunicação{hasWhatsapp ? "" : " · Premium"}</Link>}
         {user.role === "OWNER" && <Link href="/ia"><Bot size={18}/> IA{hasAI ? "" : " · Premium"}</Link>}
