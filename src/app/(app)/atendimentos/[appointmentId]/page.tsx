@@ -8,9 +8,9 @@ import { addClinicalNoteAction,finishConsultationAction,saveConsultationAction }
 
 export default async function Page({params,searchParams}:{params:Promise<{appointmentId:string}>,searchParams:Promise<Record<string,string|undefined>>}) {
   const {appointmentId}=await params; const query=await searchParams; const {user,companyId}=await requireCompany();
-  if(!["OWNER","PROFESSIONAL"].includes(user.role)) redirect("/atendimentos?erro=permissao");
+  if(!user.professional?.id) redirect("/atendimentos?erro=permissao");
   const a=await prisma.appointment.findFirst({
-    where:{id:appointmentId,companyId,...(user.role==="PROFESSIONAL"?{professionalId:user.professional?.id||"__none__"}:{})},
+    where:{id:appointmentId,companyId,professionalId:user.professional.id},
     include:{patient:true,professional:{include:{specialty:true}},consultation:{include:{notes:{orderBy:{createdAt:"desc"}}}},clinicalDocuments:{orderBy:{issuedAt:"desc"}}}
   });
   if(!a) notFound(); const c=a.consultation;

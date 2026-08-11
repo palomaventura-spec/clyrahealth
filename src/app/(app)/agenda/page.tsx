@@ -101,7 +101,11 @@ export default async function AgendaPage({
             </label>
             <label>Data<input name="date" type="date" required /></label>
             <label>Horário<input name="time" type="time" required /></label>
-            <label className="span-2">Motivo<input name="reason" /></label>
+            <label className="span-2">Tipo de atendimento
+              <select name="reason" defaultValue="ROTINA">
+                <option value="PRIMEIRA_CONSULTA">Primeira consulta</option><option value="RETORNO">Retorno</option><option value="ROTINA">Rotina</option><option value="URGENCIA">Urgência</option><option value="PROCEDIMENTO">Procedimento</option><option value="OUTRO">Outro</option>
+              </select><small className="field-help">Informação administrativa. A queixa principal fica restrita ao prontuário clínico.</small>
+            </label>
             <button className="btn btn-primary span-2">Agendar</button>
           </form>
         </section>

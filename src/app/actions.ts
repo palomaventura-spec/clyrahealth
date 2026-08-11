@@ -132,26 +132,78 @@ export async function createSpecialtyAction(formData: FormData) {
 }
 
 export async function createProfessionalAction(formData: FormData) {
-  const {user,companyId}=await requireCompany(); if(!["OWNER","ADMIN"].includes(user.role)) return;
-  const name=String(formData.get("name")||"").trim(); const email=String(formData.get("email")||"").trim().toLowerCase();
-  const type=String(formData.get("type")||"OTHER") as ProfessionalType; let specialtyId=String(formData.get("specialtyId")||"")||null;
-  const newSpecialtyName=String(formData.get("newSpecialtyName")||formData.get("specialtyPreset")||"").trim(); const duration=Number(formData.get("appointmentDuration")||30);
-  if(!name||!email) return; if(await prisma.user.findUnique({where:{email}})) redirect("/profissionais?erro=email");
-  if(newSpecialtyName){ const sp=await prisma.specialty.upsert({where:{companyId_name:{companyId,name:newSpecialtyName}},update:{},create:{companyId,name:newSpecialtyName}}); specialtyId=sp.id; }
-  const base=slugify(name)||"profissional"; let publicSlug=base,suffix=1; while(await prisma.professional.findFirst({where:{companyId,publicSlug}})) publicSlug=`${base}-${suffix++}`;
-  const passwordHash=await bcrypt.hash(crypto.randomBytes(32).toString("hex"),10); const inviteToken=crypto.randomBytes(32).toString("hex");
-  const availabilities=parseAvailabilityForm(formData);
-  const professionalUser=await prisma.$transaction(async tx=>{
-    const createdUser=await tx.user.create({data:{name,email,passwordHash,role:"PROFESSIONAL",companyId,mustChangePassword:true}});
-    await tx.professional.create({data:{name,publicSlug,type,specialtyId,companyId,userId:createdUser.id,email,
-      phone:String(formData.get("phone")||"")||null,council:String(formData.get("council")||"")||null,
-      registrationNumber:String(formData.get("registrationNumber")||"")||null,appointmentDuration:Number.isFinite(duration)?duration:30,
-      availabilities:{create:availabilities}}});
-    await tx.passwordResetToken.create({data:{token:inviteToken,userId:createdUser.id,expiresAt:new Date(Date.now()+7*86400000),inviteKind:"PROFESSIONAL_INVITE"}});
-    return createdUser;
+  const { user, companyId } = await requireCompany();
+  if (!["OWNER", "ADMIN"].includes(user.role)) return;
+
+  const name = String(formData.get("name") || "").trim();
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const type = String(formData.get("type") || "OTHER") as ProfessionalType;
+  let specialtyId = String(formData.get("specialtyId") || "") || null;
+  const newSpecialtyName = String(formData.get("newSpecialtyName") || formData.get("specialtyPreset") || "").trim();
+  const duration = Number(formData.get("appointmentDuration") || 30);
+  if (!name || !email) return;
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+    include: { professional: true }
   });
-  await audit({action:"CREATE",entityType:"Professional",entityId:professionalUser.id,companyId,userId:user.id,description:`Profissional ${name} criado com agenda e convite`});
-  redirect(`/profissionais?convite=${inviteToken}&email=${encodeURIComponent(email)}&sucesso=1`);
+
+  if (existingUser && existingUser.companyId !== companyId) {
+    redirect("/profissionais?erro=email-outra-clinica");
+  }
+  if (existingUser?.professional) {
+    redirect("/profissionais?erro=ja-profissional");
+  }
+  // Na v1.0.5 o reaproveitamento seguro é permitido para o OWNER da própria clínica.
+  if (existingUser && existingUser.role !== "OWNER") {
+    redirect("/profissionais?erro=email-equipe");
+  }
+
+  if (newSpecialtyName) {
+    const sp = await prisma.specialty.upsert({
+      where: { companyId_name: { companyId, name: newSpecialtyName } }, update: {}, create: { companyId, name: newSpecialtyName }
+    });
+    specialtyId = sp.id;
+  }
+
+  const base = slugify(name) || "profissional";
+  let publicSlug = base, suffix = 1;
+  while (await prisma.professional.findFirst({ where: { companyId, publicSlug } })) publicSlug = `${base}-${suffix++}`;
+  const availabilities = parseAvailabilityForm(formData);
+
+  let linkedUserId: string;
+  let inviteToken: string | null = null;
+
+  if (existingUser) {
+    linkedUserId = existingUser.id;
+  } else {
+    const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
+    inviteToken = crypto.randomBytes(32).toString("hex");
+    const createdUser = await prisma.user.create({
+      data: { name, email, passwordHash, role: "PROFESSIONAL", companyId, mustChangePassword: true }
+    });
+    linkedUserId = createdUser.id;
+    await prisma.passwordResetToken.create({
+      data: { token: inviteToken, userId: createdUser.id, expiresAt: new Date(Date.now() + 7 * 86400000), inviteKind: "PROFESSIONAL_INVITE" }
+    });
+  }
+
+  const professional = await prisma.professional.create({
+    data: {
+      name, publicSlug, type, specialtyId, companyId, userId: linkedUserId, email,
+      phone: String(formData.get("phone") || "") || null,
+      council: String(formData.get("council") || "") || null,
+      registrationNumber: String(formData.get("registrationNumber") || "") || null,
+      appointmentDuration: Number.isFinite(duration) ? duration : 30,
+      availabilities: { create: availabilities }
+    }
+  });
+
+  await audit({ action:"CREATE", entityType:"Professional", entityId:professional.id, companyId, userId:user.id,
+    description: existingUser ? `OWNER ${name} vinculado ao perfil profissional` : `Profissional ${name} criado com agenda e convite` });
+
+  if (inviteToken) redirect(`/profissionais?convite=${inviteToken}&email=${encodeURIComponent(email)}&sucesso=1`);
+  redirect(`/profissionais?sucesso=vinculado&email=${encodeURIComponent(email)}`);
 }
 
 export async function updateProfessionalAction(formData: FormData) {
@@ -224,22 +276,37 @@ export async function updateProfessionalAction(formData: FormData) {
 }
 
 export async function createPatientAction(formData: FormData) {
-  const { companyId } = await requireCompany();
+  const { user, companyId } = await requireCompany();
+  if (!["OWNER","ADMIN","RECEPTIONIST","PROFESSIONAL"].includes(user.role)) return;
   const name = String(formData.get("name") || "").trim();
   if (!name) return;
+  const birthDateRaw = String(formData.get("birthDate") || "");
 
-  await prisma.patient.create({
-    data: {
-      name,
-      companyId,
-      email: String(formData.get("email") || "") || null,
-      phone: String(formData.get("phone") || "") || null,
-      document: String(formData.get("document") || "") || null,
-      insurance: String(formData.get("insurance") || "") || null,
-      notes: String(formData.get("notes") || "") || null
-    }
-  });
+  const patient = await prisma.patient.create({ data: {
+    name, companyId,
+    email: String(formData.get("email") || "") || null,
+    phone: String(formData.get("phone") || "") || null,
+    document: String(formData.get("document") || "") || null,
+    birthDate: birthDateRaw ? new Date(`${birthDateRaw}T12:00:00`) : null,
+    sex: String(formData.get("sex") || "") || null,
+    zipCode: String(formData.get("zipCode") || "") || null,
+    street: String(formData.get("street") || "") || null,
+    addressNumber: String(formData.get("addressNumber") || "") || null,
+    complement: String(formData.get("complement") || "") || null,
+    neighborhood: String(formData.get("neighborhood") || "") || null,
+    city: String(formData.get("city") || "") || null,
+    state: String(formData.get("state") || "") || null,
+    guardianName: String(formData.get("guardianName") || "") || null,
+    guardianPhone: String(formData.get("guardianPhone") || "") || null,
+    careType: String(formData.get("careType") || "PRIVATE"),
+    insurance: String(formData.get("insurance") || "") || null,
+    insurancePlan: String(formData.get("insurancePlan") || "") || null,
+    insuranceCard: String(formData.get("insuranceCard") || "") || null,
+    notes: String(formData.get("notes") || "") || null
+  }});
+  await audit({action:"CREATE",entityType:"Patient",entityId:patient.id,companyId,userId:user.id,description:`Paciente ${name} cadastrado`});
   revalidatePath("/pacientes");
+  redirect("/pacientes?sucesso=1");
 }
 
 export async function createAvailabilityAction(formData: FormData) {

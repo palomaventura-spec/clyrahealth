@@ -31,7 +31,11 @@ export default async function ProfessionalsPage({searchParams}:{searchParams:Pro
       <code>{`${process.env.NEXT_PUBLIC_APP_URL??""}/redefinir-senha?token=${query.convite}`}</code>
     </div>}
 
+    {query.sucesso==="vinculado"&&<div className="alert alert-success">✓ Seu usuário de gestor foi vinculado ao perfil profissional. Você continuará usando o mesmo login.</div>}
     {query.erro==="email"&&<div className="alert alert-error">Este e-mail já está vinculado a um usuário.</div>}
+    {query.erro==="email-outra-clinica"&&<div className="alert alert-error">Este e-mail pertence a outra clínica e não pode ser vinculado.</div>}
+    {query.erro==="ja-profissional"&&<div className="alert alert-error">Este usuário já possui um perfil profissional.</div>}
+    {query.erro==="email-equipe"&&<div className="alert alert-error">Este e-mail já pertence a outro membro da equipe. Nesta versão, o vínculo automático é permitido ao proprietário da clínica.</div>}
 
     <div className="page-header"><div>
       <span className="eyebrow">Equipe clínica</span>

@@ -287,7 +287,20 @@ model Patient {
   phone           String?
   document        String?
   birthDate       DateTime?
+  sex             String?
+  zipCode         String?
+  street          String?
+  addressNumber   String?
+  complement      String?
+  neighborhood    String?
+  city            String?
+  state           String?
+  guardianName    String?
+  guardianPhone   String?
+  careType        String?          @default("PRIVATE")
   insurance       String?
+  insurancePlan   String?
+  insuranceCard   String?
   notes           String?
   companyId       String
   company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)

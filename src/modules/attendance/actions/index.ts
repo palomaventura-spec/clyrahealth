@@ -8,9 +8,9 @@ import { attendanceSchema } from "@/modules/attendance/validations";
 
 async function requireProfessionalAppointment(appointmentId: string) {
   const { user, companyId } = await requireCompany();
-  if (!["OWNER","PROFESSIONAL"].includes(user.role)) redirect("/atendimentos?erro=permissao");
+  if (!user.professional?.id) redirect("/atendimentos?erro=permissao");
   const appointment = await prisma.appointment.findFirst({
-    where: { id: appointmentId, companyId, ...(user.role === "PROFESSIONAL" ? { professionalId: user.professional?.id || "__none__" } : {}) },
+    where: { id: appointmentId, companyId, professionalId: user.professional.id },
     include: { patient: true, consultation: true }
   });
   if (!appointment) redirect("/atendimentos?erro=consulta");
