@@ -12,10 +12,14 @@ export default async function Page({ params, searchParams }: {
   const company = await prisma.company.findUnique({ where: { slug } });
   if (!company) notFound();
 
-  return <main className="tenant-login-shell">
+  const clinicName=company.publicName??company.name;
+
+  return <main className="tenant-login-shell" style={{"--primary":company.accentColor??"#2563eb"} as React.CSSProperties}>
     <section className="tenant-login-card">
-      <span className="eyebrow">ClyraHealth</span>
-      <h1>{company.publicName ?? company.name}</h1>
+      {company.logoUrl
+        ? <img className="tenant-logo" src={company.logoUrl} alt={`Logo ${clinicName}`}/>
+        : <span className="eyebrow">ClyraHealth</span>}
+      <h1>{clinicName}</h1>
       <p>{company.loginHeadline ?? "Acesse sua conta."}</p>
       {q.cadastro === "sucesso" && <div className="alert alert-success">Conta criada. Seu teste gratuito começou.</div>}
       {q.erro === "credenciais" && <div className="alert alert-error">E-mail ou senha inválidos para esta clínica.</div>}

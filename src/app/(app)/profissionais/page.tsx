@@ -16,8 +16,11 @@ const weekdays=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 export default async function ProfessionalsPage({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){
   const query=await searchParams;
   const {user,companyId}=await requireCompany();
+  const professionalOnly=user.role==="PROFESSIONAL";
   const professionals=await prisma.professional.findMany({
-    where:{companyId},
+    where:professionalOnly
+      ? {companyId,id:user.professional?.id||"__none__"}
+      : {companyId},
     include:{specialty:true,availabilities:true,user:{select:{email:true,mustChangePassword:true}}},
     orderBy:{name:"asc"}
   });
@@ -38,9 +41,11 @@ export default async function ProfessionalsPage({searchParams}:{searchParams:Pro
     {query.erro==="email-equipe"&&<div className="alert alert-error">Este e-mail já pertence a outro membro da equipe. Nesta versão, o vínculo automático é permitido ao proprietário da clínica.</div>}
 
     <div className="page-header"><div>
-      <span className="eyebrow">Equipe clínica</span>
-      <h1>Profissionais</h1>
-      <p>Cada profissional possui profissão, especialidade e agenda próprias.</p>
+      <span className="eyebrow">{professionalOnly?"Perfil profissional":"Equipe clínica"}</span>
+      <h1>{professionalOnly?"Meu perfil profissional":"Profissionais"}</h1>
+      <p>{professionalOnly
+        ? "Consulte seus dados profissionais e personalize sua própria agenda."
+        : "Cada profissional possui profissão, especialidade e agenda próprias."}</p>
     </div></div>
 
     {manage&&<section className="card section-card professional-create-section">
@@ -67,6 +72,8 @@ export default async function ProfessionalsPage({searchParams}:{searchParams:Pro
         <PendingSubmitButton idle="Cadastrar profissional e agenda" pending="Salvando profissional e agenda..." className="btn btn-primary span-2"/>
       </form>
     </section>}
+
+    {professionalOnly&&professionals.length===0&&<div className="card section-card empty-state">Seu usuário ainda não está vinculado a um perfil profissional. Peça ao gestor da clínica para concluir o vínculo.</div>}
 
     <div className="cards-grid">
       {professionals.map(p=>{

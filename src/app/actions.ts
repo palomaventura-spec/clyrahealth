@@ -102,8 +102,21 @@ export async function registerCompanyAction(formData: FormData) {
   redirect("/onboarding?cadastro=sucesso");
 }
 
+function validPilotLogo(value: string) {
+  return /^data:image\/(png|jpeg|webp);base64,/i.test(value) && value.length <= 450_000;
+}
+
+function validAccentColor(value: string) {
+  return /^#[0-9a-f]{6}$/i.test(value);
+}
+
 export async function completeOnboardingAction(formData: FormData) {
-  const { companyId } = await requireCompany();
+  const { user, companyId } = await requireCompany();
+  if (!canManage(user.role)) return;
+
+  const logoData = String(formData.get("logoData") || "");
+  const accentColor = String(formData.get("accentColor") || "#2563eb");
+
   await prisma.company.update({
     where: { id: companyId },
     data: {
@@ -112,10 +125,62 @@ export async function completeOnboardingAction(formData: FormData) {
       address: String(formData.get("address") || "") || null,
       city: String(formData.get("city") || "") || null,
       state: String(formData.get("state") || "") || null,
+      logoUrl: validPilotLogo(logoData) ? logoData : null,
+      accentColor: validAccentColor(accentColor) ? accentColor : "#2563eb",
       onboardingCompleted: true
     }
   });
   redirect("/dashboard");
+}
+
+export async function updateCompanyBrandingAction(formData: FormData) {
+  const { user, companyId } = await requireCompany();
+  if (!canManage(user.role)) return;
+
+  const current = await prisma.company.findUnique({ where: { id: companyId } });
+  if (!current) return;
+
+  const publicName = String(formData.get("publicName") || current.name).trim();
+  const phone = String(formData.get("phone") || "").trim();
+  const email = String(formData.get("email") || "").trim();
+  const address = String(formData.get("address") || "").trim();
+  const city = String(formData.get("city") || "").trim();
+  const state = String(formData.get("state") || "").trim().toUpperCase().slice(0, 2);
+  const accentColor = String(formData.get("accentColor") || current.accentColor || "#2563eb");
+  const logoData = String(formData.get("logoData") || "");
+  const removeLogo = String(formData.get("removeLogo") || "0") === "1";
+
+  let logoUrl = current.logoUrl;
+  if (removeLogo) logoUrl = null;
+  else if (logoData && validPilotLogo(logoData)) logoUrl = logoData;
+
+  await prisma.company.update({
+    where: { id: companyId },
+    data: {
+      publicName: publicName || current.name,
+      phone: phone || null,
+      email: email || null,
+      address: address || null,
+      city: city || null,
+      state: state || null,
+      accentColor: validAccentColor(accentColor) ? accentColor : "#2563eb",
+      logoUrl
+    }
+  });
+
+  await audit({
+    action: "UPDATE",
+    entityType: "Company",
+    entityId: companyId,
+    companyId,
+    userId: user.id,
+    description: "Identidade visual e dados da clínica atualizados"
+  });
+
+  revalidatePath("/configuracoes");
+  revalidatePath(`/acesso/${current.slug}`);
+  revalidatePath(`/agendar/${current.slug}`);
+  redirect("/configuracoes?salvo=1");
 }
 
 export async function createSpecialtyAction(formData: FormData) {

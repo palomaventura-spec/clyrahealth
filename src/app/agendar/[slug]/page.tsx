@@ -37,9 +37,13 @@ export default async function PublicBookingPage({
 
   return (
     <main className="booking-page">
-      <header className="booking-header">
-        <Link href="/" className="brand">Clyra<span>Health</span></Link>
-        <div><strong>{company.name}</strong><small>{[company.city, company.state].filter(Boolean).join(" / ")}</small></div>
+      <header className="booking-header" style={{"--primary":company.accentColor??"#2563eb"} as React.CSSProperties}>
+        <Link href="/" className="booking-brand-link">
+          {company.logoUrl
+            ? <img className="booking-logo" src={company.logoUrl} alt={`Logo ${company.publicName??company.name}`}/>
+            : <span className="brand">Clyra<span>Health</span></span>}
+        </Link>
+        <div><strong>{company.publicName??company.name}</strong><small>{[company.city, company.state].filter(Boolean).join(" / ")}</small></div>
       </header>
 
       <div className="booking-container booking-narrow">

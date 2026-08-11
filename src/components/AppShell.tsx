@@ -35,8 +35,12 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <Link href="/dashboard" className="brand">Clyra<span>Health</span></Link>
-      <div className="sidebar-meta"><strong>{user.company?.name ?? "ClyraHealth"}</strong><small>{user.name} · {user.role}</small></div>
+      <Link href="/dashboard" className="brand sidebar-branding">
+        {user.company?.logoUrl
+          ? <img src={user.company.logoUrl} alt={`Logo ${user.company.publicName??user.company.name}`}/>
+          : <>Clyra<span>Health</span></>}
+      </Link>
+      <div className="sidebar-meta"><strong>{user.company?.publicName ?? user.company?.name ?? "ClyraHealth"}</strong><small>{user.name} · {user.role}</small></div>
       <nav>
         <Link href="/dashboard"><LayoutDashboard size={18}/> Dashboard</Link>
         <Link href="/agenda"><CalendarDays size={18}/> Agenda</Link>
