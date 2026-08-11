@@ -449,3 +449,6 @@ button[disabled]{opacity:.68;cursor:not-allowed}.button-spinner,.large-spinner{d
 
 /* ClyraHealth v1.0.7 - Financeiro e Gestão */
 .finance-split{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.finance-split>div{display:grid;gap:4px;padding:16px;background:var(--surface-2);border-radius:12px}.finance-split span{color:var(--muted);font-size:12px;font-weight:750}.finance-split strong{font-size:22px}.finance-details{position:relative}.finance-details summary{list-style:none}.finance-details summary::-webkit-details-marker{display:none}.finance-edit-form{position:absolute;right:0;z-index:20;width:320px;display:grid;gap:10px;padding:14px;margin-top:8px;background:white;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}@media(max-width:700px){.finance-split{grid-template-columns:1fr 1fr}.finance-edit-form{position:fixed;left:16px;right:16px;bottom:16px;width:auto}}
+
+/* ClyraHealth v1.0.8 - Gestão avançada */
+.dashboard-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end}@media(max-width:900px){.dashboard-filters{grid-template-columns:1fr 1fr}}@media(max-width:600px){.dashboard-filters{grid-template-columns:1fr}}

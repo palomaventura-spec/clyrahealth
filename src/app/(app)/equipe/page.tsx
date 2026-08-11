@@ -1,4 +1,4 @@
-import { createTeamUserAction } from "@/app/actions";
+import { createTeamUserAction, updateTeamFinanceAccessAction } from "@/app/actions";
 import { canManage, requireCompany } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
@@ -46,8 +46,8 @@ export default async function TeamPage({
       </section>
       <section className="card section-card">
         <div className="table-wrap"><table>
-          <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th></tr></thead>
-          <tbody>{users.map(u => <tr key={u.id}><td>{u.name}</td><td>{u.email}</td><td>{u.role}</td><td>{u.active ? "Ativo" : "Inativo"}</td></tr>)}</tbody>
+          <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Financeiro</th><th>Status</th></tr></thead>
+          <tbody>{users.map(u => <tr key={u.id}><td>{u.name}</td><td>{u.email}</td><td>{u.role}</td><td>{u.role==="RECEPTIONIST"?<form action={updateTeamFinanceAccessAction} className="inline-form"><input type="hidden" name="id" value={u.id}/><select name="receptionFinanceAccess" defaultValue={u.receptionFinanceAccess}><option value="NONE">Sem acesso</option><option value="DAILY">Caixa do dia</option><option value="FULL">Completo</option></select><button className="btn btn-small btn-secondary">Salvar</button></form>:"—"}</td><td>{u.active ? "Ativo" : "Inativo"}</td></tr>)}</tbody>
         </table></div>
       </section>
     </div>

@@ -16,8 +16,8 @@ export default async function PatientsPage({searchParams}:{searchParams:Promise<
       <label>E-mail<input name="email" type="email"/></label><label>Telefone<input name="phone"/></label>
       <label>CEP<input name="zipCode"/></label><label>Logradouro<input name="street"/></label><label>Número<input name="addressNumber"/></label><label>Complemento<input name="complement"/></label><label>Bairro<input name="neighborhood"/></label><label>Cidade<input name="city"/></label><label>UF<input name="state" maxLength={2}/></label>
       <label>Responsável<input name="guardianName"/></label><label>Telefone do responsável<input name="guardianPhone"/></label>
-      <label>Atendimento<select name="careType" defaultValue="PRIVATE"><option value="PRIVATE">Particular</option><option value="INSURANCE">Convênio</option></select></label>
-      <label>Convênio<input name="insurance"/></label><label>Plano<input name="insurancePlan"/></label><label>Carteirinha<input name="insuranceCard"/></label>
+      <label>Atendimento<select name="careType" defaultValue="PRIVATE"><option value="PRIVATE">Particular</option><option value="INSURANCE">Plano de saúde / convênio</option></select></label>
+      <label>Operadora / plano de saúde<input name="insurance"/></label><label>Plano / categoria<input name="insurancePlan"/></label><label>Carteirinha<input name="insuranceCard"/></label><label>Validade da carteirinha<input name="insuranceValidity" type="date"/></label>
       <label className="span-2">Observações administrativas<input name="notes"/></label>
       <PendingSubmitButton idle="Cadastrar paciente" pending="Cadastrando paciente..." className="btn btn-primary span-2"/>
     </form></section>

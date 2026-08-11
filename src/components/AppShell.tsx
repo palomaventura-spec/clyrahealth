@@ -50,7 +50,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         {clinicalMenu && <Link href="/documentos"><FileText size={18}/> Documentos</Link>}
         <Link href="/profissionais"><Stethoscope size={18}/> Profissionais</Link>
         <Link href="/pacientes"><Users size={18}/> Pacientes</Link>
-        {["OWNER","ADMIN","PROFESSIONAL"].includes(user.role) && <Link href="/financeiro"><WalletCards size={18}/> Financeiro</Link>}
+        {(["OWNER","ADMIN","PROFESSIONAL"].includes(user.role) || (user.role==="RECEPTIONIST" && user.receptionFinanceAccess!=="NONE")) && <Link href="/financeiro"><WalletCards size={18}/> {user.role==="RECEPTIONIST"&&user.receptionFinanceAccess==="DAILY"?"Caixa do dia":"Financeiro"}</Link>}
         {["OWNER","ADMIN"].includes(user.role) && <Link href="/equipe"><UserCog size={18}/> Equipe</Link>}
         {["OWNER","ADMIN"].includes(user.role) && <Link href="/comunicacao"><MessageCircle size={18}/> Comunicação{hasWhatsapp ? "" : " · Premium"}</Link>}
         {user.role === "OWNER" && <Link href="/ia"><Bot size={18}/> IA{hasAI ? "" : " · Premium"}</Link>}

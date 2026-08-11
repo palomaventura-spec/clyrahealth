@@ -350,6 +350,37 @@ export async function updateProfessionalAction(formData: FormData) {
   redirect(`/profissionais/${id}/editar?sucesso=1`);
 }
 
+
+export async function updateTeamFinanceAccessAction(formData: FormData) {
+  const { user, companyId } = await requireCompany();
+  if (!canManage(user.role)) return;
+
+  const id = String(formData.get("id") || "");
+  const access = String(formData.get("receptionFinanceAccess") || "NONE") as any;
+
+  const target = await prisma.user.findFirst({
+    where: { id, companyId, role: "RECEPTIONIST" }
+  });
+  if (!target) return;
+
+  await prisma.user.update({
+    where: { id },
+    data: { receptionFinanceAccess: access }
+  });
+
+  await audit({
+    action: "UPDATE",
+    entityType: "UserFinanceAccess",
+    entityId: id,
+    companyId,
+    userId: user.id,
+    description: `Permissão financeira da recepção alterada para ${access}`
+  });
+
+  revalidatePath("/equipe");
+  revalidatePath("/financeiro");
+}
+
 export async function createPatientAction(formData: FormData) {
   const { user, companyId } = await requireCompany();
   if (!["OWNER","ADMIN","RECEPTIONIST","PROFESSIONAL"].includes(user.role)) return;
@@ -377,6 +408,9 @@ export async function createPatientAction(formData: FormData) {
     insurance: String(formData.get("insurance") || "") || null,
     insurancePlan: String(formData.get("insurancePlan") || "") || null,
     insuranceCard: String(formData.get("insuranceCard") || "") || null,
+    insuranceValidity: String(formData.get("insuranceValidity") || "")
+      ? new Date(`${String(formData.get("insuranceValidity"))}T12:00:00`)
+      : null,
     notes: String(formData.get("notes") || "") || null
   }});
   await audit({action:"CREATE",entityType:"Patient",entityId:patient.id,companyId,userId:user.id,description:`Paciente ${name} cadastrado`});
@@ -482,7 +516,10 @@ export async function createAppointmentAction(formData: FormData) {
           careType: resolvedCareType,
           grossAmountCents: safeGrossAmountCents,
           discountCents,
-          finalAmountCents
+          finalAmountCents,
+          insuranceName: resolvedCareType === "INSURANCE" ? patient.insurance : null,
+          insurancePlan: resolvedCareType === "INSURANCE" ? patient.insurancePlan : null,
+          insuranceCard: resolvedCareType === "INSURANCE" ? patient.insuranceCard : null
         }
       });
     }, {
@@ -531,6 +568,7 @@ export async function createTeamUserAction(formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const name = String(formData.get("name") || "").trim();
   const role = String(formData.get("role") || "RECEPTIONIST") as UserRole;
+  const receptionFinanceAccess = String(formData.get("receptionFinanceAccess") || "NONE") as any;
 
   if (!email || !name || !["ADMIN", "RECEPTIONIST"].includes(role)) return;
   if (await prisma.user.findUnique({ where: { email } })) {
@@ -549,6 +587,7 @@ export async function createTeamUserAction(formData: FormData) {
         passwordHash,
         role,
         companyId,
+        receptionFinanceAccess: role === "RECEPTIONIST" ? receptionFinanceAccess : "FULL",
         mustChangePassword: true
       }
     });

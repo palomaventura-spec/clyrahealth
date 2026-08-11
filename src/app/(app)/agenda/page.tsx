@@ -108,7 +108,7 @@ export default async function AgendaPage({
                 <option value="PRIMEIRA_CONSULTA">Primeira consulta</option><option value="RETORNO">Retorno</option><option value="ROTINA">Rotina</option><option value="URGENCIA">Urgência</option><option value="PROCEDIMENTO">Procedimento</option><option value="OUTRO">Outro</option>
               </select><small className="field-help">Informação administrativa. A queixa principal fica restrita ao prontuário clínico.</small>
             </label>
-            <label>Forma de atendimento<select name="careType" defaultValue="PRIVATE"><option value="PRIVATE">Particular</option><option value="INSURANCE">Convênio</option></select></label>
+            <label>Forma de atendimento<select name="careType" defaultValue="PRIVATE"><option value="PRIVATE">Particular</option><option value="INSURANCE">Plano de saúde / convênio</option></select></label>
             <label>Valor (R$)<input name="amount" inputMode="decimal" placeholder="Usa o valor padrão do profissional"/></label>
             <label>Desconto (R$)<input name="discount" inputMode="decimal" placeholder="0,00"/></label>
             <button className="btn btn-primary span-2">Agendar</button>
@@ -151,7 +151,7 @@ export default async function AgendaPage({
                   <td>{formatDateTime(a.startsAt)}</td>
                   <td>{a.patient.name}<br/><small>{a.reason ?? ""}</small></td>
                   <td>{a.professional.name}</td>
-                  <td>{a.careType==="INSURANCE"?"Convênio":"Particular"}</td>
+                  <td>{a.careType==="INSURANCE"?"Plano de saúde":"Particular"}</td>
                   <td>{new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(a.finalAmountCents/100)}</td>
                   <td><StatusBadge status={a.status} /></td>
                   <td>
