@@ -5,7 +5,7 @@ import { requireCompany } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/StatusBadge";
 import { addClinicalNoteAction,saveConsultationAction } from "@/modules/attendance/actions";
-import { builtinProtocols,getBuiltinProtocol } from "@/modules/protocols/builtins";
+import { builtinProtocols,getBuiltinProtocol,protocolMatchesSpecialties } from "@/modules/protocols/builtins";
 
 export default async function Page({params,searchParams}:{params:Promise<{appointmentId:string}>,searchParams:Promise<Record<string,string|undefined>>}) {
   const {appointmentId}=await params; const query=await searchParams; const {user,companyId}=await requireCompany();
@@ -15,7 +15,10 @@ export default async function Page({params,searchParams}:{params:Promise<{appoin
     include:{patient:true,professional:{include:{specialty:true}},consultation:{include:{notes:{orderBy:{createdAt:"desc"}}}},clinicalDocuments:{orderBy:{issuedAt:"desc"}}}
   });
   if(!a) notFound(); const c=a.consultation;
-  const customProtocols=await prisma.protocolTemplate.findMany({where:{companyId,active:true},orderBy:{name:"asc"}});
+  const allCustomProtocols=await prisma.protocolTemplate.findMany({where:{companyId,active:true},orderBy:{name:"asc"}});
+  const professionalSpecialty=a.professional.specialty?.name??null;
+  const visibleBuiltinProtocols=builtinProtocols.filter(p=>protocolMatchesSpecialties(p,[professionalSpecialty]));
+  const customProtocols=allCustomProtocols.filter(p=>!p.specialty||!professionalSpecialty||p.specialty.toLocaleLowerCase("pt-BR").includes(professionalSpecialty.toLocaleLowerCase("pt-BR"))||professionalSpecialty.toLocaleLowerCase("pt-BR").includes(p.specialty.toLocaleLowerCase("pt-BR")));
   const builtin=getBuiltinProtocol(query.protocol);
   const custom=query.customProtocol?customProtocols.find(p=>p.id===query.customProtocol):undefined;
   const template=builtin??custom;
@@ -24,7 +27,7 @@ export default async function Page({params,searchParams}:{params:Promise<{appoin
     {query.erro&&<div className="alert alert-error">Revise os dados do atendimento.</div>}
     {query.sucesso==="rascunho"&&<div className="alert alert-success">✓ Rascunho salvo. Você pode continuar o atendimento depois.</div>}
     <div className="attendance-meta card"><div><span>Consulta</span><strong>{formatDateTime(a.startsAt)}</strong></div><div><span>Motivo</span><strong>{a.reason??"Não informado"}</strong></div><div><span>Status</span><strong>{a.status}</strong></div></div>
-    <section className="card section-card"><div className="section-title"><div><h2>Protocolos / modelos</h2><p>Carregue uma estrutura pronta. Revise e adapte todo o conteúdo antes de salvar.</p></div></div><div className="protocol-picker">{builtinProtocols.map(p=><Link key={p.id} href={`/atendimentos/${a.id}?protocol=${p.id}`} className="btn btn-small btn-secondary">{p.name}</Link>)}{customProtocols.map(p=><Link key={p.id} href={`/atendimentos/${a.id}?customProtocol=${p.id}`} className="btn btn-small btn-secondary">{p.name}</Link>)}<Link href="/protocolos" className="btn btn-small btn-primary">Gerenciar protocolos</Link></div>{template&&<div className="alert alert-success">Modelo carregado: <strong>{template.name}</strong>. O conteúdo abaixo ainda não foi salvo.</div>}</section>
+    <section className="card section-card"><div className="section-title"><div><h2>Protocolos / modelos</h2><p>Carregue uma estrutura pronta. Revise e adapte todo o conteúdo antes de salvar.</p></div></div><div className="protocol-picker">{visibleBuiltinProtocols.map(p=><Link key={p.id} href={`/atendimentos/${a.id}?protocol=${p.id}`} className="btn btn-small btn-secondary">{p.name}</Link>)}{customProtocols.map(p=><Link key={p.id} href={`/atendimentos/${a.id}?customProtocol=${p.id}`} className="btn btn-small btn-secondary">{p.name}</Link>)}<Link href="/protocolos" className="btn btn-small btn-primary">Gerenciar protocolos</Link></div>{template&&<div className="alert alert-success">Modelo carregado: <strong>{template.name}</strong>. O conteúdo abaixo ainda não foi salvo.</div>}</section>
     <form action={saveConsultationAction} className="card section-card attendance-form">
       <input type="hidden" name="appointmentId" value={a.id}/>
       <label>Queixa principal<textarea name="complaint" rows={3} defaultValue={c?.complaint??template?.complaint??""}/></label>

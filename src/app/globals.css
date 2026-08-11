@@ -443,3 +443,6 @@ button[disabled]{opacity:.68;cursor:not-allowed}.button-spinner,.large-spinner{d
 
 /* ClyraHealth v1.0.6 - Protocolos + Lista de Espera */
 .protocol-picker{display:flex;gap:8px;flex-wrap:wrap}.protocol-picker+.alert{margin-top:14px}
+
+/* ClyraHealth v1.0.6.4 - protocolos por especialidade */
+.protocol-specialty-summary{margin:-8px 0 20px;padding:11px 14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-2);color:var(--muted);font-size:13px}.protocol-specialty-summary strong{color:var(--text)}
