@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   createAppointmentAction,
   createScheduleBlockAction,
@@ -66,6 +67,7 @@ export default async function AgendaPage({
           <h1>Agenda</h1>
           <p>Consultas, reagendamentos, bloqueios e disponibilidade da clínica.</p>
         </div>
+        <div className="header-actions"><Link href="/lista-espera" className="btn btn-secondary">Lista de espera / encaixes</Link></div>
       </div>
 
       {params.erro === "horario" && (
