@@ -44,9 +44,13 @@ export async function startConsultationAction(formData: FormData) {
 
 export async function saveConsultationAction(formData: FormData) {
   const appointmentId = String(formData.get("appointmentId") || "");
+  const intent = String(formData.get("intent") || "draft");
   const { companyId, appointment } = await requireProfessionalAppointment(appointmentId);
   const parsed = attendanceSchema.safeParse({
     complaint:String(formData.get("complaint") || "") || undefined,
+    anamnesis:String(formData.get("anamnesis") || "") || undefined,
+    examination:String(formData.get("examination") || "") || undefined,
+    assessment:String(formData.get("assessment") || "") || undefined,
     evolution:String(formData.get("evolution") || "") || undefined,
     conduct:String(formData.get("conduct") || "") || undefined,
     returnNotes:String(formData.get("returnNotes") || "") || undefined,
@@ -54,12 +58,24 @@ export async function saveConsultationAction(formData: FormData) {
   });
   if (!parsed.success) redirect(`/atendimentos/${appointmentId}?erro=dados`);
   const returnDate = parsed.data.returnDate ? new Date(`${parsed.data.returnDate}T12:00:00`) : null;
+  const clinicalData = {
+    complaint:parsed.data.complaint, anamnesis:parsed.data.anamnesis, examination:parsed.data.examination,
+    assessment:parsed.data.assessment, evolution:parsed.data.evolution, conduct:parsed.data.conduct,
+    returnNotes:parsed.data.returnNotes, returnDate
+  };
   await prisma.consultation.upsert({
     where:{appointmentId},
-    update:{complaint:parsed.data.complaint,evolution:parsed.data.evolution,conduct:parsed.data.conduct,returnNotes:parsed.data.returnNotes,returnDate},
-    create:{appointmentId,patientId:appointment.patientId,professionalId:appointment.professionalId,companyId,complaint:parsed.data.complaint,evolution:parsed.data.evolution,conduct:parsed.data.conduct,returnNotes:parsed.data.returnNotes,returnDate,startedAt:new Date()}
+    update:{...clinicalData, ...(intent === "finish" ? {finishedAt:new Date()} : {})},
+    create:{appointmentId,patientId:appointment.patientId,professionalId:appointment.professionalId,companyId,...clinicalData,startedAt:new Date(),...(intent === "finish" ? {finishedAt:new Date()} : {})}
   });
+  if (intent === "finish") {
+    await prisma.appointment.update({where:{id:appointmentId},data:{status:"COMPLETED"}});
+    revalidatePath("/dashboard"); revalidatePath("/atendimentos"); revalidatePath(`/pacientes/${appointment.patientId}`);
+    redirect("/atendimentos?sucesso=finalizado");
+  }
+  if (appointment.status !== "IN_PROGRESS") await prisma.appointment.update({where:{id:appointmentId},data:{status:"IN_PROGRESS"}});
   revalidatePath(`/atendimentos/${appointmentId}`); revalidatePath(`/pacientes/${appointment.patientId}`);
+  redirect(`/atendimentos/${appointmentId}?sucesso=rascunho`);
 }
 
 export async function finishConsultationAction(formData: FormData) {

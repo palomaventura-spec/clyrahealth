@@ -380,6 +380,9 @@ model Consultation {
   companyId      String
   company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   complaint      String?
+  anamnesis      String?
+  examination    String?
+  assessment     String?
   evolution      String?
   conduct        String?
   returnNotes    String?
